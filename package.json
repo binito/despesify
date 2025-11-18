@@ -1,0 +1,17 @@
+{
+  "name": "despesify",
+  "version": "0.1.0",
+  "description": "Aplicação de gerenciamento de despesas (versão Expensify)",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
