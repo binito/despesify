@@ -1,138 +1,202 @@
-# Despesify
+# Despesify v2.0
 
-Uma aplicação completa de gerenciamento de despesas, similar ao Expensify, com versões web e mobile.
+Aplicação web de gestão de despesas pessoais com OCR, sincronização com Streamlit e interface moderna.
 
-## 🚀 Funcionalidades
+## ✨ Funcionalidades
 
-- **Gerenciamento de Despesas**: Adicione, edite e delete despesas com facilidade
-- **Categorização**: Organize suas despesas por categorias predefinidas
-- **Estatísticas e Gráficos**: Visualize seus gastos através de gráficos e relatórios
-- **Autenticação Segura**: Sistema de login e registro com JWT
-- **Multi-plataforma**: Use no web, Android e iOS
-- **Sincronização**: Todos os seus dados sincronizados na nuvem
+✅ **Autenticação Multi-user**
+- Registro seguro com hash de senhas
+- Login com JWT
+- Sessões persistentes
 
-## 📁 Estrutura do Projeto
+✅ **Gestão de Despesas**
+- Criar, listar e visualizar despesas
+- Categorias personalizadas por utilizador
+- Métodos de pagamento variados
+- Suporte a IVA
 
+✅ **Upload de Ficheiros**
+- Imagens (JPG, PNG)
+- PDFs de facturas
+- Armazenamento seguro
+
+✅ **OCR Automático e Manual**
+- Tesseract.js para extração de texto
+- Detecção de valores monetários
+- Extração automática de datas
+- Identificação de IVA
+- Preenchimento automático de campos
+- Botão OCR manual para processar qualquer imagem/PDF sob demanda
+- Feedback visual com campos extraídos
+
+✅ **Sincronização Streamlit**
+- Exportação automática para CSV
+- Compatível com Streamlit (porta 8502)
+- Atualizações em tempo real
+
+## 🚀 Quick Start
+
+### 1. Dependências
+
+```bash
+npm install
 ```
-despesify/
-├── packages/
-│   ├── backend/         # API Node.js + Express
-│   ├── web/            # Front-end React
-│   └── mobile/         # App React Native
-├── README.md
-└── package.json
+
+### 2. Configurar Banco de Dados
+
+Copie e edite `.env.local`:
+
+```bash
+cp .env.local.example .env.local
 ```
 
-## 🛠️ Tecnologias Utilizadas
+Inicialize o MariaDB:
 
-### Backend
-- **Node.js** - Runtime JavaScript
-- **Express** - Framework web
-- **MongoDB** - Banco de dados
-- **JWT** - Autenticação
-- **Bcrypt** - Criptografia de senhas
+```bash
+node scripts/init-db.js
+```
 
-### Web
-- **React** - Library UI
-- **Vite** - Build tool
-- **React Router** - Roteamento
-- **Tailwind CSS** - Estilização
-- **Chart.js** - Gráficos
-- **Zustand** - State management
-- **Axios** - HTTP client
+### 3. Iniciar Servidor
 
-### Mobile
-- **React Native** - Framework mobile
-- **Expo** - Plataforma para React Native
-- **React Navigation** - Navegação
-- **React Native Paper** - Componentes UI
-- **Zustand** - State management
+**Desenvolvimento:**
+```bash
+npm run dev
+```
 
-## 📦 Instalação
+**Produção:**
+```bash
+npm run build
+npm run start
+```
 
-### Pré-requisitos
-- Node.js 16+
+Acesso em `http://localhost:8520`
+
+## 📋 Requisitos
+
+- Node.js >= 18.0.0
+- MariaDB >= 10.6
 - npm ou yarn
-- MongoDB
 
-### 1. Backend
+## 📁 Estrutura
 
-```bash
-cd packages/backend
-npm install
-cp .env.example .env
-# Configure seu banco de dados no .env
-npm run dev
+```
+app/
+├── api/                        # Rotas API
+│   ├── auth/                  # Login/Registro
+│   ├── despesas/              # Gestão de despesas
+│   ├── ocr/                   # OCR de facturas
+│   ├── categorias/            # Gestão de categorias
+│   └── sync-csv/              # Sincronização Streamlit
+├── login/                      # Página de login
+├── registro/                   # Página de registro
+└── despesas/                   # Gestão de despesas
+
+lib/
+├── db.ts                       # Conexão MariaDB
+├── auth.ts                     # Funções de autenticação
+└── authMiddleware.ts           # Middleware JWT
 ```
 
-### 2. Frontend Web
+## 📸 Como usar OCR
 
-```bash
-cd packages/web
-npm install
-npm run dev
-# Abre em http://localhost:3000
-```
+### OCR Automático
+Ao fazer upload de uma imagem, o OCR é executado automaticamente e preenche os campos.
 
-### 3. App Mobile
-
-```bash
-cd packages/mobile
-npm install
-npm start
-# Escaneie o QR code com o Expo Go no seu telefone
-```
-
-## 📚 API Endpoints
-
-### Autenticação
-- `POST /auth/register` - Registrar novo usuário
-- `POST /auth/login` - Login
-
-### Despesas
-- `GET /expenses` - Listar despesas
-- `GET /expenses/:id` - Obter despesa específica
-- `POST /expenses` - Criar despesa
-- `PUT /expenses/:id` - Atualizar despesa
-- `DELETE /expenses/:id` - Deletar despesa
-- `GET /expenses/stats` - Obter estatísticas
+### OCR Manual
+Para processar uma imagem manualmente ou reprocessar uma fatura:
+1. Vá para **Nova Despesa**
+2. Faça upload da imagem/PDF
+3. Clique no botão **🔍 OCR** sobreposto na preview
+4. O sistema extrai: Valor, Descrição, Data e IVA
+5. Reveja e ajuste os valores conforme necessário
 
 ## 🔐 Autenticação
 
-O sistema utiliza JWT para autenticação. Toda requisição para endpoints protegidos deve incluir:
+Token JWT obrigatório para endpoints protegidos:
 
 ```
 Authorization: Bearer {token}
 ```
 
-## 📝 Variáveis de Ambiente
+## 📊 API Endpoints
 
-### Backend (.env)
+### Autenticação
+- `POST /api/auth/registro` - Registrar novo utilizador
+- `POST /api/auth/login` - Login
+- `GET /api/auth/me` - Dados do utilizador
+
+### Despesas
+- `GET /api/despesas` - Listar despesas
+- `POST /api/despesas` - Criar despesa com upload
+
+### OCR
+- `POST /api/ocr` - Processar fatura com OCR
+
+### Categorias
+- `GET /api/categorias` - Listar categorias
+- `POST /api/categorias` - Criar categoria
+
+### Sincronização
+- `POST /api/sync-csv` - Sincronizar com CSV para Streamlit
+
+## 🌐 Deploy
+
+### Localmente (192.168.1.176:8520)
+
+```bash
+npm run build
+npm run start
 ```
-PORT=3001
-MONGODB_URI=mongodb://localhost:27017/despesify
-JWT_SECRET=your_secret_key_here
-JWT_EXPIRE=7d
-NODE_ENV=development
-```
 
-## 🎯 Funcionalidades Futuras
+### Domínio (despesify.cafemartins.pt)
 
-- [ ] Upload de recibos (fotos)
-- [ ] Compartilhamento de despesas com outras pessoas
-- [ ] Cálculo automático de reembolsos
+Configurar Nginx como proxy reverso com SSL.
+
+Ver `SETUP.md` para instruções completas.
+
+## 📚 Documentação
+
+- `SETUP.md` - Guia de configuração detalhado
+- `.env.local.example` - Variáveis de ambiente
+
+## 🛠️ Tecnologias
+
+- **Next.js 14** - Framework React fullstack
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Estilização
+- **MariaDB** - Banco de dados
+- **JWT** - Autenticação
+- **Tesseract.js** - OCR
+- **mysql2** - Driver MySQL
+
+## ⚡ Performance
+
+- Server-side rendering
+- Otimização de imagens
+- Caching
+- Compressão Gzip
+
+## 🔒 Segurança
+
+✓ Hashing de senhas com bcrypt
+✓ JWT para autenticação
+✓ Validação de inputs
+✓ Proteção contra CSRF
+✓ Suporte a HTTPS (produção)
+
+## 📝 Próximos Passos
+
+- [ ] Dashboard com gráficos
 - [ ] Exportação em PDF
-- [ ] Suporte a múltiplas moedas
-- [ ] Sincronização offline
-
-## 👨‍💻 Desenvolvedor
-
-Despesify foi criado para ajudá-lo a gerenciar suas despesas de forma inteligente e fácil.
+- [ ] Relatórios mensais
+- [ ] Integração de receitas
+- [ ] 2FA para login
+- [ ] Tema escuro
 
 ## 📄 Licença
 
 MIT
 
-## 🤝 Contribuindo
+---
 
-Contribuições são bem-vindas! Sinta-se livre para abrir issues e pull requests.
+Para mais informações, consulte `SETUP.md`
