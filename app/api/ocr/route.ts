@@ -189,19 +189,35 @@ const handler = async (req: NextRequest, context: any) => {
 
     try {
       console.log(`Executando Tesseract OCR para ${file.name}`)
-      const result = await Tesseract.recognize(
-        dataUrl,
-        'por+eng',
-        {
-          logger: (m: any) => console.log('OCR Progress:', m)
-        }
-      )
+
+      // Create a worker with proper configuration for Node.js environment
+      const worker = await Tesseract.createWorker({
+        logger: (m: any) => {
+          if (m.status === 'recognizing text') {
+            console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`)
+          }
+        },
+        errorHandler: (err: any) => console.error('Tesseract Error:', err)
+      })
+
+      console.log('Worker criado, carregando idiomas...')
+      await worker.loadLanguage('por+eng')
+      await worker.initialize('por+eng')
+
+      console.log('Iniciando reconhecimento...')
+      const result = await worker.recognize(dataUrl)
       text = result.data.text
+
       console.log(`OCR concluído. Texto extraído (primeiros 300 chars): ${text.substring(0, 300)}`)
-    } catch (ocrError) {
+
+      // Terminate worker to free resources
+      await worker.terminate()
+      console.log('Worker terminado')
+    } catch (ocrError: any) {
       console.error('Erro no OCR:', ocrError)
+      console.error('Stack:', ocrError.stack)
       return NextResponse.json(
-        { message: 'Erro ao processar imagem com OCR' },
+        { message: `Erro ao processar imagem com OCR: ${ocrError.message || 'Desconhecido'}` },
         { status: 500 }
       )
     }
