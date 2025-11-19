@@ -64,46 +64,106 @@ const handler = async (req: NextRequest, context: any) => {
       try {
         console.log(`Convertendo PDF para imagem: ${file.name}`)
 
-        // Convert PDF to image
+        // Save PDF to temp file first
         const tempDir = os.tmpdir()
         const timestamp = Date.now()
+        const tempPdfPath = path.join(tempDir, `ocr-input-${timestamp}.pdf`)
+        const tempPngPath = path.join(tempDir, `ocr-output-${timestamp}.png`)
 
-        const converter = fromBuffer(bufferNode, {
-          density: 150,
-          saveFilename: `ocr-pdf-${timestamp}`,
-          savePath: tempDir,
-          format: 'png',
-          width: 1200,
-          height: 1600
-        })
+        // Write PDF to temp file
+        fs.writeFileSync(tempPdfPath, bufferNode)
+        console.log(`PDF salvo temporariamente: ${tempPdfPath}`)
 
-        const pages = await converter
+        // Try pdf2pic first
+        let imageBuffer: Buffer | null = null
+        try {
+          const converter = fromBuffer(bufferNode, {
+            density: 200,
+            saveFilename: `ocr-pdf2pic-${timestamp}`,
+            savePath: tempDir,
+            format: 'png',
+            width: 2000,
+            height: 2600
+          })
 
-        if (!pages || pages.length === 0) {
-          throw new Error('Nenhuma página PDF convertida')
+          const result = await converter(1) // Convert page 1
+
+          if (result && result.path) {
+            console.log(`PDF convertido com pdf2pic: ${result.path}`)
+            imageBuffer = fs.readFileSync(result.path)
+
+            // Clean up
+            try {
+              fs.unlinkSync(result.path)
+            } catch (e) {}
+          }
+        } catch (pdf2picError) {
+          console.warn('pdf2pic falhou, tentando ImageMagick diretamente:', pdf2picError)
         }
 
-        // Use first page
-        const imagePath = pages[0].path
-        console.log(`PDF convertido para imagem: ${imagePath}`)
+        // Fallback: Use Ghostscript directly via command line
+        if (!imageBuffer) {
+          console.log('Usando Ghostscript diretamente...')
+          const { exec } = require('child_process')
+          const { promisify } = require('util')
+          const execPromise = promisify(exec)
 
-        // Read image and preprocess
-        const imageBuffer = fs.readFileSync(imagePath)
+          try {
+            // Use Ghostscript to convert PDF to PNG (page 1 only)
+            // -dFirstPage=1 -dLastPage=1: Only first page
+            // -r200: 200 DPI resolution
+            // -dNOPAUSE -dBATCH: Non-interactive
+            // -sDEVICE=png16m: 24-bit color PNG
+            const gsCommand = `gs -dSAFER -dNOPAUSE -dBATCH -dFirstPage=1 -dLastPage=1 -r200 -sDEVICE=png16m -sOutputFile="${tempPngPath}" "${tempPdfPath}"`
+
+            console.log('Executando Ghostscript:', gsCommand)
+            await execPromise(gsCommand)
+
+            if (fs.existsSync(tempPngPath)) {
+              console.log(`PDF convertido com Ghostscript: ${tempPngPath}`)
+              imageBuffer = fs.readFileSync(tempPngPath)
+            } else {
+              console.error('Ghostscript executou mas não gerou ficheiro PNG')
+            }
+          } catch (gsError) {
+            console.error('Ghostscript falhou:', gsError)
+
+            // Last resort: Try ImageMagick if Ghostscript fails
+            console.log('Tentando ImageMagick como último recurso...')
+            try {
+              await execPromise(`convert -density 200 -quality 100 "${tempPdfPath}[0]" "${tempPngPath}"`)
+
+              if (fs.existsSync(tempPngPath)) {
+                console.log(`PDF convertido com ImageMagick (último recurso): ${tempPngPath}`)
+                imageBuffer = fs.readFileSync(tempPngPath)
+              }
+            } catch (imError) {
+              console.error('ImageMagick também falhou:', imError)
+            }
+          }
+        }
+
+        // Clean up temp files
+        try {
+          if (fs.existsSync(tempPdfPath)) fs.unlinkSync(tempPdfPath)
+          if (fs.existsSync(tempPngPath)) fs.unlinkSync(tempPngPath)
+        } catch (e) {
+          console.warn('Erro ao limpar ficheiros temporários:', e)
+        }
+
+        if (!imageBuffer) {
+          throw new Error('Não foi possível converter PDF para imagem')
+        }
+
+        // Preprocess the converted image
         const processedBuffer = await preprocessImage(imageBuffer)
         dataUrl = bufferToDataUrl(processedBuffer, 'image/png')
 
-        // Clean up temp file
-        try {
-          fs.unlinkSync(imagePath)
-        } catch (e) {
-          console.warn('Erro ao limpar ficheiro temporário:', e)
-        }
-
         console.log(`PDF convertido e pré-processado: ${file.name}`)
       } catch (pdfError) {
-        console.error('Erro ao converter PDF para imagem:', pdfError)
+        console.error('Erro ao processar PDF:', pdfError)
         return NextResponse.json(
-          { message: 'Não foi possível processar o PDF. Tente converter para imagem (JPG/PNG) e enviar novamente.' },
+          { message: `Erro ao processar PDF: ${pdfError instanceof Error ? pdfError.message : 'Desconhecido'}. Por favor, converta o PDF para imagem (JPG/PNG) e tente novamente.` },
           { status: 400 }
         )
       }
