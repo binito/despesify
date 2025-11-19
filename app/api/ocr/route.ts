@@ -2,9 +2,41 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/authMiddleware'
 import Tesseract from 'tesseract.js'
 import { fromBuffer } from 'pdf2pic'
+import sharp from 'sharp'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+
+// Preprocess image for better OCR results
+async function preprocessImage(imageBuffer: Buffer): Promise<Buffer> {
+  try {
+    console.log('Iniciando pré-processamento de imagem...')
+
+    // Enhance image for OCR:
+    // 1. Normalize colors
+    // 2. Increase contrast
+    // 3. Sharpen
+    // 4. Increase size if too small
+    const processed = await sharp(imageBuffer)
+      .normalize() // Normalize histogram
+      .sharpen({ sigma: 2 }) // Sharpen for text clarity
+      .threshold(128) // Convert to black and white (binary)
+      .toBuffer()
+
+    console.log(`Pré-processamento concluído. Tamanho original: ${imageBuffer.length}, Processado: ${processed.length}`)
+    return processed
+  } catch (error) {
+    console.warn('Erro no pré-processamento:', error)
+    // Return original if preprocessing fails
+    return imageBuffer
+  }
+}
+
+// Convert buffer to base64 data URL
+function bufferToDataUrl(buffer: Buffer, mimeType: string = 'image/png'): string {
+  const base64 = buffer.toString('base64')
+  return `data:${mimeType};base64,${base64}`
+}
 
 const handler = async (req: NextRequest, context: any) => {
   if (req.method !== 'POST') {
@@ -55,10 +87,10 @@ const handler = async (req: NextRequest, context: any) => {
         const imagePath = pages[0].path
         console.log(`PDF convertido para imagem: ${imagePath}`)
 
-        // Read image and convert to base64
+        // Read image and preprocess
         const imageBuffer = fs.readFileSync(imagePath)
-        const base64Image = imageBuffer.toString('base64')
-        dataUrl = `data:image/png;base64,${base64Image}`
+        const processedBuffer = await preprocessImage(imageBuffer)
+        dataUrl = bufferToDataUrl(processedBuffer, 'image/png')
 
         // Clean up temp file
         try {
@@ -67,7 +99,7 @@ const handler = async (req: NextRequest, context: any) => {
           console.warn('Erro ao limpar ficheiro temporário:', e)
         }
 
-        console.log(`Iniciando OCR no PDF convertido: ${file.name}`)
+        console.log(`PDF convertido e pré-processado: ${file.name}`)
       } catch (pdfError) {
         console.error('Erro ao converter PDF para imagem:', pdfError)
         return NextResponse.json(
@@ -77,9 +109,9 @@ const handler = async (req: NextRequest, context: any) => {
       }
     } else if (file.type.startsWith('image/')) {
       // Handle images directly
-      const base64 = bufferNode.toString('base64')
-      dataUrl = `data:${file.type};base64,${base64}`
       console.log(`Processando imagem: ${file.name}`)
+      const processedBuffer = await preprocessImage(bufferNode)
+      dataUrl = bufferToDataUrl(processedBuffer, file.type)
     } else {
       return NextResponse.json(
         { message: 'Ficheiro deve ser uma imagem (JPG, PNG) ou PDF' },
