@@ -32,7 +32,13 @@ interface Expense {
   category_id: number
   payment_method: string
   vat_percentage: number
+  vat_amount: number
   notes: string
+  nif_emitente?: string
+  nif_adquirente?: string
+  numero_documento?: string
+  atcud?: string
+  base_tributavel?: number
 }
 
 export default function EditarDespesa() {
@@ -45,8 +51,14 @@ export default function EditarDespesa() {
   const [date, setDate] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [vatPercentage, setVatPercentage] = useState('')
+  const [valorIva, setValorIva] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [notes, setNotes] = useState('')
+  const [nifEmitente, setNifEmitente] = useState('')
+  const [nifAdquirente, setNifAdquirente] = useState('')
+  const [numeroDocumento, setNumeroDocumento] = useState('')
+  const [atcud, setAtcud] = useState('')
+  const [baseTributavel, setBaseTributavel] = useState('')
   const [categories, setCategories] = useState<Category[]>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [filePreviews, setFilePreviews] = useState<FilePreview[]>([])
@@ -87,7 +99,13 @@ export default function EditarDespesa() {
       setCategoryId(String(expense.category_id || ''))
       setPaymentMethod(expense.payment_method || 'cash')
       setVatPercentage(expense.vat_percentage ? String(expense.vat_percentage) : '')
+      setValorIva(expense.vat_amount ? String(expense.vat_amount) : '')
       setNotes(expense.notes || '')
+      setNifEmitente(expense.nif_emitente || '')
+      setNifAdquirente(expense.nif_adquirente || '')
+      setNumeroDocumento(expense.numero_documento || '')
+      setAtcud(expense.atcud || '')
+      setBaseTributavel(expense.base_tributavel ? String(expense.base_tributavel) : '')
 
       // Carregar anexos
       if (data.attachments && data.attachments.length > 0) {
@@ -164,8 +182,14 @@ export default function EditarDespesa() {
           expense_date: date,
           category_id: categoryId ? parseInt(categoryId) : null,
           vat_percentage: vatPercentage ? parseFloat(vatPercentage) : null,
+          vat_amount: valorIva ? parseFloat(valorIva) : null,
           payment_method: paymentMethod,
-          notes
+          notes,
+          nif_emitente: nifEmitente || null,
+          nif_adquirente: nifAdquirente || null,
+          numero_documento: numeroDocumento || null,
+          atcud: atcud || null,
+          base_tributavel: baseTributavel ? parseFloat(baseTributavel) : null
         })
       })
 
@@ -276,18 +300,17 @@ export default function EditarDespesa() {
 
               <div>
                 <label className="block text-gray-700 font-bold mb-2">
-                  IVA
+                  Valor IVA (€)
                 </label>
-                <select
-                  value={vatPercentage}
-                  onChange={(e) => setVatPercentage(e.target.value)}
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={valorIva}
+                  onChange={(e) => setValorIva(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                >
-                  <option value="">Isento</option>
-                  <option value="6">6%</option>
-                  <option value="13">13%</option>
-                  <option value="23">23%</option>
-                </select>
+                  placeholder="0.00"
+                />
               </div>
 
               <div>
@@ -320,6 +343,81 @@ export default function EditarDespesa() {
                 rows={3}
               />
             </div>
+
+            {(nifEmitente || nifAdquirente || numeroDocumento || atcud || baseTributavel || valorIva) && (
+              <div className="mb-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h3 className="text-lg font-bold text-blue-900 mb-4">Dados do QR Code AT</h3>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-2">
+                      NIF Emitente
+                    </label>
+                    <input
+                      type="text"
+                      value={nifEmitente}
+                      onChange={(e) => setNifEmitente(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                      placeholder="NIF do emitente"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-2">
+                      NIF Adquirente
+                    </label>
+                    <input
+                      type="text"
+                      value={nifAdquirente}
+                      onChange={(e) => setNifAdquirente(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                      placeholder="NIF do adquirente"
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-gray-700 font-bold mb-2">
+                    Número do Documento
+                  </label>
+                  <input
+                    type="text"
+                    value={numeroDocumento}
+                    onChange={(e) => setNumeroDocumento(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                    placeholder="Número do documento"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-gray-700 font-bold mb-2">
+                    ATCUD
+                  </label>
+                  <input
+                    type="text"
+                    value={atcud}
+                    onChange={(e) => setAtcud(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                    placeholder="Código ATCUD"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-gray-700 font-bold mb-2">
+                    Base Tributável (€)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={baseTributavel}
+                    onChange={(e) => setBaseTributavel(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Coluna 2: Ficheiros */}

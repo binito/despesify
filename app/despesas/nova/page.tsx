@@ -24,6 +24,7 @@ export default function NovaDespesa() {
   const [newCategory, setNewCategory] = useState('')
   const [newCategoryColor, setNewCategoryColor] = useState('#3B82F6')
   const [vatPercentage, setVatPercentage] = useState('')
+  const [valorIva, setValorIva] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [notes, setNotes] = useState('')
   const [files, setFiles] = useState<FileList | null>(null)
@@ -222,7 +223,7 @@ export default function NovaDespesa() {
           updates.push('Data')
         }
         if (data.qr_data.valor_iva) {
-          setVatPercentage(data.qr_data.valor_iva)
+          setValorIva(data.qr_data.valor_iva)
           updates.push('Valor IVA')
         }
         if (data.qr_data.nif_emitente) {
@@ -338,7 +339,7 @@ export default function NovaDespesa() {
       if (numeroDocumento) formData.append('numero_documento', numeroDocumento)
       if (atcud) formData.append('atcud', atcud)
       if (baseTributavel) formData.append('base_tributavel', baseTributavel)
-      if (vatPercentage && qrData) formData.append('valor_iva', vatPercentage)
+      if (valorIva && qrData) formData.append('valor_iva', valorIva)
 
       const res = await fetch('/api/despesas', {
         method: 'POST',
@@ -468,18 +469,17 @@ export default function NovaDespesa() {
 
               <div>
                 <label className="block text-gray-700 font-bold mb-2">
-                  IVA
+                  Valor IVA (€)
                 </label>
-                <select
-                  value={vatPercentage}
-                  onChange={(e) => setVatPercentage(e.target.value)}
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={valorIva}
+                  onChange={(e) => setValorIva(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                >
-                  <option value="">Isento</option>
-                  <option value="6">6%</option>
-                  <option value="13">13%</option>
-                  <option value="23">23%</option>
-                </select>
+                  placeholder="0.00"
+                />
               </div>
             </div>
 
@@ -620,36 +620,19 @@ export default function NovaDespesa() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-gray-700 font-bold mb-2">
-                      Base Tributável (€)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={baseTributavel}
-                      onChange={(e) => setBaseTributavel(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-gray-700 font-bold mb-2">
-                      Valor IVA (€)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={vatPercentage}
-                      onChange={(e) => setVatPercentage(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                      placeholder="0.00"
-                    />
-                  </div>
+                <div className="mb-4">
+                  <label className="block text-gray-700 font-bold mb-2">
+                    Base Tributável (€)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={baseTributavel}
+                    onChange={(e) => setBaseTributavel(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                    placeholder="0.00"
+                  />
                 </div>
               </div>
             )}

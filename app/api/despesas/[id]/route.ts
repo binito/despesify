@@ -44,8 +44,14 @@ const handler = async (req: NextRequest, context: any) => {
         expense_date,
         category_id,
         vat_percentage,
+        vat_amount,
         payment_method,
-        notes
+        notes,
+        nif_emitente,
+        nif_adquirente,
+        numero_documento,
+        atcud,
+        base_tributavel
       } = await req.json()
 
       // Verificar se despesa pertence ao utilizador
@@ -63,8 +69,8 @@ const handler = async (req: NextRequest, context: any) => {
 
       // Atualizar despesa
       await query(
-        'UPDATE expenses SET description = ?, amount = ?, expense_date = ?, category_id = ?, vat_percentage = ?, payment_method = ?, notes = ? WHERE id = ?',
-        [description, amount, expense_date, category_id || null, vat_percentage || null, payment_method, notes || '', expenseId]
+        'UPDATE expenses SET description = ?, amount = ?, expense_date = ?, category_id = ?, vat_percentage = ?, vat_amount = ?, payment_method = ?, notes = ?, nif_emitente = ?, nif_adquirente = ?, numero_documento = ?, atcud = ?, base_tributavel = ? WHERE id = ?',
+        [description, amount, expense_date, category_id || null, vat_percentage || null, vat_amount || null, payment_method, notes || '', nif_emitente || null, nif_adquirente || null, numero_documento || null, atcud || null, base_tributavel || null, expenseId]
       )
 
       return NextResponse.json(
