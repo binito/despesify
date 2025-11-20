@@ -41,3 +41,8 @@ coverage/
 # Cache
 .eslintcache
 .cache/
+
+# Uploads and data
+uploads/
+data/
+*.csv

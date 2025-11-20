@@ -209,9 +209,9 @@ export default function NovaDespesa() {
 
         // Preencher campos automaticamente do QR
         const updates: string[] = []
-        if (data.qr_data.amount) {
-          setAmount(data.qr_data.amount)
-          updates.push('Valor')
+        if (data.qr_data.valor_total) {
+          setAmount(data.qr_data.valor_total)
+          updates.push('Valor Total')
         }
         if (data.qr_data.description) {
           setDescription(data.qr_data.description)
@@ -221,9 +221,9 @@ export default function NovaDespesa() {
           setDate(data.qr_data.date)
           updates.push('Data')
         }
-        if (data.qr_data.vat_percentage) {
-          setVatPercentage(data.qr_data.vat_percentage)
-          updates.push('IVA')
+        if (data.qr_data.valor_iva) {
+          setVatPercentage(data.qr_data.valor_iva)
+          updates.push('Valor IVA')
         }
         if (data.qr_data.nif_emitente) {
           setNifEmitente(data.qr_data.nif_emitente)
@@ -338,6 +338,7 @@ export default function NovaDespesa() {
       if (numeroDocumento) formData.append('numero_documento', numeroDocumento)
       if (atcud) formData.append('atcud', atcud)
       if (baseTributavel) formData.append('base_tributavel', baseTributavel)
+      if (vatPercentage && qrData) formData.append('valor_iva', vatPercentage)
 
       const res = await fetch('/api/despesas', {
         method: 'POST',
@@ -606,20 +607,20 @@ export default function NovaDespesa() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-gray-700 font-bold mb-2">
-                      ATCUD
-                    </label>
-                    <input
-                      type="text"
-                      value={atcud}
-                      onChange={(e) => setAtcud(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                      placeholder="Código ATCUD"
-                    />
-                  </div>
+                <div className="mb-4">
+                  <label className="block text-gray-700 font-bold mb-2">
+                    ATCUD
+                  </label>
+                  <input
+                    type="text"
+                    value={atcud}
+                    onChange={(e) => setAtcud(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                    placeholder="Código ATCUD"
+                  />
+                </div>
 
+                <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-gray-700 font-bold mb-2">
                       Base Tributável (€)
@@ -630,6 +631,21 @@ export default function NovaDespesa() {
                       min="0"
                       value={baseTributavel}
                       onChange={(e) => setBaseTributavel(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-2">
+                      Valor IVA (€)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={vatPercentage}
+                      onChange={(e) => setVatPercentage(e.target.value)}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
                       placeholder="0.00"
                     />

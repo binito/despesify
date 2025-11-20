@@ -38,11 +38,12 @@ const handler = async (req: NextRequest, context: any) => {
       const numeroDocumento = formData.get('numero_documento')
       const atcud = formData.get('atcud')
       const baseTributavel = formData.get('base_tributavel')
+      const valorIva = formData.get('valor_iva')
 
       // Create expense
       const result = await query(
-        'INSERT INTO expenses (user_id, category_id, description, amount, expense_date, payment_method, notes, vat_percentage, nif_emitente, nif_adquirente, numero_documento, atcud, base_tributavel, qr_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [userId, categoryId || null, description, amount, date, paymentMethod, notes, vatPercentage || null, nifEmitente || null, nifAdquirente || null, numeroDocumento || null, atcud || null, baseTributavel || null, qrData || null]
+        'INSERT INTO expenses (user_id, category_id, description, amount, expense_date, payment_method, notes, vat_percentage, vat_amount, nif_emitente, nif_adquirente, numero_documento, atcud, base_tributavel, qr_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [userId, categoryId || null, description, amount, date, paymentMethod, notes, vatPercentage || null, valorIva || null, nifEmitente || null, nifAdquirente || null, numeroDocumento || null, atcud || null, baseTributavel || null, qrData || null]
       ) as any
 
       const expenseId = result.insertId

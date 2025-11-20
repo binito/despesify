@@ -1,0 +1,335 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                                                                            ║
+║                    DESPESIFY v2.0 - COMEÇAR AQUI                          ║
+║                                                                            ║
+║                      Projeto Completamente Reconstruído                   ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+BEM-VINDO! 🎉
+
+O seu projeto Despesify foi completamente reconstruído do zero com uma
+arquitetura moderna, profissional e pronta para produção.
+
+────────────────────────────────────────────────────────────────────────────
+⚡ COMECE AGORA EM 3 PASSOS
+────────────────────────────────────────────────────────────────────────────
+
+1️⃣  INSTALAR DEPENDÊNCIAS
+    $ npm install
+
+2️⃣  CONFIGURAR BANCO DE DADOS
+    $ cp .env.local.example .env.local
+    (Edite .env.local com suas credenciais MariaDB)
+    $ node scripts/init-db.js
+
+3️⃣  INICIAR SERVIDOR
+    $ npm run dev
+
+    Acesso em: http://localhost:8520
+
+────────────────────────────────────────────────────────────────────────────
+✨ O QUE VOCÊ GANHOU
+────────────────────────────────────────────────────────────────────────────
+
+✅ AUTENTICAÇÃO SEGURA
+   - Registro de utilizadores
+   - Login com JWT (30 dias)
+   - Hash de senhas com bcrypt
+
+✅ GESTÃO DE DESPESAS PROFISSIONAL
+   - Criar/editar despesas
+   - Categorias personalizadas
+   - Upload de imagens e PDFs
+   - Suporte a IVA
+   - Métodos de pagamento
+
+✅ OCR AUTOMÁTICO (Tesseract.js)
+   - Reconhecimento de texto em imagens
+   - Extração automática de valores
+   - Detecção de datas
+   - Identificação de IVA
+   - Preenchimento automático do formulário
+
+✅ BANCO DE DADOS ROBUSTO (MariaDB)
+   - Tabelas otimizadas (4 tabelas)
+   - Relacionamentos com integridade
+   - Script de inicialização automática
+
+✅ SINCRONIZAÇÃO COM STREAMLIT
+   - Exportação automática para CSV
+   - Compatível com seu Streamlit (porta 8502)
+   - Atualização em tempo real
+
+✅ INTERFACE MODERNA
+   - React 18 + TypeScript
+   - Tailwind CSS responsivo
+   - Design profissional
+   - Funcionalidade completa
+
+────────────────────────────────────────────────────────────────────────────
+📁 ESTRUTURA DO PROJETO
+────────────────────────────────────────────────────────────────────────────
+
+despesify/
+├── 📘 README.md                    ← Leia primeiro!
+├── 📘 SETUP.md                     ← Configuração detalhada
+├── 📘 DEPLOYMENT.md                ← Como fazer deploy
+├── 📘 PROJECT_START.md             ← Guia detalhado
+├── 📘 COMEÇAR_AQUI.txt             ← Este ficheiro
+│
+├── 🔧 package.json                 ← Dependências
+├── 🔧 .env.local.example           ← Variáveis de ambiente
+├── 🔧 next.config.js               ← Configuração Next.js
+│
+├── 💻 app/                         ← Código Next.js (Frontend + Backend)
+│   ├── login/                      ← Página de login
+│   ├── registro/                   ← Página de registro
+│   ├── despesas/                   ← Gestão de despesas
+│   └── api/                        ← Rotas API
+│       ├── auth/                   ← Autenticação
+│       ├── despesas/               ← Gestão despesas
+│       ├── ocr/                    ← OCR
+│       ├── categorias/             ← Categorias
+│       └── sync-csv/               ← Sincronização
+│
+├── 🛠️  lib/                        ← Utilitários
+│   ├── db.ts                       ← Conexão MariaDB
+│   ├── auth.ts                     ← Funções auth
+│   └── authMiddleware.ts           ← Middleware JWT
+│
+├── 📊 public/uploads/              ← Ficheiros carregados
+├── 📊 data/                        ← CSV para Streamlit
+└── 📊 scripts/                     ← Scripts úteis
+
+────────────────────────────────────────────────────────────────────────────
+📚 DOCUMENTAÇÃO DISPONÍVEL
+────────────────────────────────────────────────────────────────────────────
+
+1. README.md
+   → Visão geral rápida do projeto
+   → Funcionalidades principais
+   → Stack tecnológico
+
+2. PROJECT_START.md
+   → Como começar a usar
+   → Passos iniciais
+   → Próximos passos
+
+3. SETUP.md
+   → Guia de configuração detalhada
+   → Troubleshooting
+   → Requisitos e instalação
+
+4. DEPLOYMENT.md
+   → Como fazer deploy em produção
+   → Configuração Nginx
+   → SSL/HTTPS
+   → PM2 para serviço permanente
+
+────────────────────────────────────────────────────────────────────────────
+🌐 COMO ACESSAR
+────────────────────────────────────────────────────────────────────────────
+
+DESENVOLVIMENTO:
+  http://localhost:8520
+
+PRODUÇÃO (Local):
+  http://192.168.1.176:8520
+
+DOMÍNIO (Com SSL):
+  https://despesify.cafemartins.pt
+
+────────────────────────────────────────────────────────────────────────────
+🔑 PRIMEIROS PASSOS
+────────────────────────────────────────────────────────────────────────────
+
+Após iniciar o servidor:
+
+1. Abra http://localhost:8520
+2. Clique em "Registar"
+3. Crie sua conta com nome, email e senha
+4. Faça login
+5. Clique em "+ Nova Despesa"
+6. Preencha os dados:
+   - Descrição (ex: "Supermercado Jumbo")
+   - Valor (ex: 45.50)
+   - Data
+   - Categoria (crie se necessário)
+   - Upload de imagem/PDF (OCR automático!)
+7. Clique "Guardar Despesa"
+
+O OCR processará automaticamente a imagem e preencherá os campos!
+
+────────────────────────────────────────────────────────────────────────────
+⚙️  VARIÁVEIS DE AMBIENTE IMPORTANTES
+────────────────────────────────────────────────────────────────────────────
+
+EDITE .env.local COM:
+
+DB_HOST=localhost           ← Seu servidor MariaDB
+DB_USER=root                ← Utilizador do MariaDB
+DB_PASSWORD=                ← Senha do MariaDB (mude em produção!)
+DB_NAME=despesify           ← Nome do banco
+
+JWT_SECRET=sua_chave_aqui   ← MUDE ISTO EM PRODUÇÃO!
+
+STREAMLIT_CSV_PATH=./data/expenses.csv  ← Onde salvar CSV
+
+────────────────────────────────────────────────────────────────────────────
+🚀 COMANDOS ESSENCIAIS
+────────────────────────────────────────────────────────────────────────────
+
+# Desenvolvimento
+npm run dev
+
+# Build para produção
+npm run build
+
+# Iniciar servidor de produção
+npm run start
+
+# Inicializar banco de dados
+node scripts/init-db.js
+
+# Com PM2 (serviço permanente)
+npm install -g pm2
+npm run build
+pm2 start npm -- start --name "despesify"
+pm2 save
+
+────────────────────────────────────────────────────────────────────────────
+🔗 INTEGRAÇÃO COM STREAMLIT
+────────────────────────────────────────────────────────────────────────────
+
+Seu Streamlit (porta 8502) pode ler automaticamente os dados:
+
+import pandas as pd
+
+# Ler CSV gerado automaticamente
+df = pd.read_csv('/home/jorge/despesify/data/expenses.csv')
+
+st.title('Dashboard de Despesas')
+st.dataframe(df)
+
+# Gráficos
+st.bar_chart(df.groupby('Categoria')['Valor'].sum())
+
+Os dados são atualizados em tempo real quando você cria despesas!
+
+────────────────────────────────────────────────────────────────────────────
+❓ PERGUNTAS FREQUENTES
+────────────────────────────────────────────────────────────────────────────
+
+P: Quando devo usar npm run dev vs npm run start?
+R: Use dev para desenvolvimento. Use start para produção.
+
+P: Meu MariaDB não é encontrado?
+R: Verifique se está rodando: sudo systemctl start mariadb
+
+P: O OCR não funciona?
+R: Tesseract.js precisa de internet. Verifique sua conexão.
+
+P: Como faço deploy no domínio despesify.cafemartins.pt?
+R: Ver arquivo DEPLOYMENT.md para instruções completas com Nginx.
+
+P: Posso usar isso com múltiplos utilizadores?
+R: Sim! Cada utilizador tem suas próprias despesas e categorias.
+
+P: Os dados são seguros?
+R: Sim - senhas com hash, JWT para autenticação, validação de inputs.
+
+────────────────────────────────────────────────────────────────────────────
+⚠️  IMPORTANTE ANTES DE COMEÇAR
+────────────────────────────────────────────────────────────────────────────
+
+1. ✓ Instalar Node.js 18+ (verifique: node --version)
+2. ✓ Instalar MariaDB 10.6+ (verifique: mysql --version)
+3. ✓ Certificar que MariaDB está rodando
+4. ✓ Editar .env.local com suas credenciais
+5. ✓ Executar node scripts/init-db.js
+6. ✓ Executar npm install
+7. ✓ Executar npm run dev
+
+────────────────────────────────────────────────────────────────────────────
+📋 REQUISITOS
+────────────────────────────────────────────────────────────────────────────
+
+- Node.js >= 18.0.0
+- MariaDB >= 10.6
+- npm >= 9.0.0
+- 200MB espaço em disco
+- 512MB RAM mínimo
+
+────────────────────────────────────────────────────────────────────────────
+🎯 PRÓXIMOS PASSOS
+────────────────────────────────────────────────────────────────────────────
+
+✓ Instalar e iniciar servidor (acima)
+✓ Testar fluxo: Registar → Login → Nova Despesa → OCR
+✓ Verificar CSV em data/expenses.csv
+✓ Integrar com seu Streamlit
+✓ Considerar deployment em produção
+
+────────────────────────────────────────────────────────────────────────────
+📞 SUPORTE
+────────────────────────────────────────────────────────────────────────────
+
+Se tiver dúvidas:
+
+1. Consulte a documentação:
+   - README.md
+   - SETUP.md
+   - DEPLOYMENT.md
+   - PROJECT_START.md
+
+2. Verificar logs:
+   - npm run dev (mostra erros)
+   - Ler mensagens de erro completamente
+
+3. Problemas comuns:
+   - "Port 8520 is already in use" → Usar outra porta
+   - "Cannot find module" → Fazer npm install
+   - "connect ECONNREFUSED" → MariaDB não está rodando
+
+────────────────────────────────────────────────────────────────────────────
+✅ STATUS DO PROJETO
+────────────────────────────────────────────────────────────────────────────
+
+PRONTO PARA:
+  ✓ Desenvolvimento
+  ✓ Testes
+  ✓ Deploy em 192.168.1.176:8520
+  ✓ Deploy em despesify.cafemartins.pt
+  ✓ Integração com Streamlit
+
+FUNCIONALIDADES:
+  ✓ Autenticação multi-user
+  ✓ Gestão de despesas
+  ✓ Upload de ficheiros
+  ✓ OCR automático
+  ✓ Sincronização CSV
+  ✓ Interface responsiva
+  ✓ MariaDB robusto
+
+────────────────────────────────────────────────────────────────────────────
+
+🚀 VAMOS COMEÇAR!
+
+Comande agora:
+  $ npm install
+  $ cp .env.local.example .env.local
+  (Edite .env.local)
+  $ node scripts/init-db.js
+  $ npm run dev
+
+Abra em seu navegador:
+  http://localhost:8520
+
+────────────────────────────────────────────────────────────────────────────
+
+Boa sorte com seu projeto Despesify! 🎉
+
+Para mais detalhes, consulte README.md
+
+────────────────────────────────────────────────────────────────────────────

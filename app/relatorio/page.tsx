@@ -17,6 +17,8 @@ interface Expense {
 
 interface Attachment {
   file_path: string
+  file_name?: string
+  file_type?: string
 }
 
 interface ExpenseWithAttachments extends Expense {
@@ -131,6 +133,28 @@ export default function Relatorio() {
     setFilteredExpenses(filtered)
   }
 
+  // Agrupar despesas por categoria
+  const groupByCategory = (expenses: ExpenseWithAttachments[]) => {
+    const grouped: { [key: string]: ExpenseWithAttachments[] } = {}
+
+    expenses.forEach(expense => {
+      const category = expense.category_name || 'Sem categoria'
+      if (!grouped[category]) {
+        grouped[category] = []
+      }
+      grouped[category].push(expense)
+    })
+
+    return grouped
+  }
+
+  const categoryGroups = groupByCategory(filteredExpenses)
+  const categoryTotals = Object.entries(categoryGroups).map(([category, expenses]) => ({
+    category,
+    expenses,
+    total: expenses.reduce((sum, exp) => sum + Number(exp.amount), 0)
+  })).sort((a, b) => b.total - a.total) // Ordenar por valor total decrescente
+
   const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const month = e.target.value
     setSelectedMonth(month)
@@ -163,55 +187,82 @@ export default function Relatorio() {
     pdf.text(`Período: ${monthName}`, 20, yPosition)
     yPosition += 15
 
-    // Resumo
+    // Resumo total
     const total = filteredExpenses.reduce((sum, exp) => sum + Number(exp.amount), 0)
+    pdf.setFontSize(14)
+    pdf.setTextColor(0, 0, 255)
+    pdf.text(`TOTAL GERAL: €${total.toFixed(2)}`, 20, yPosition)
+    pdf.setTextColor(0, 0, 0)
+    yPosition += 8
     pdf.setFontSize(11)
-    pdf.text(`Total de despesas: €${total.toFixed(2)}`, 20, yPosition)
-    yPosition += 10
     pdf.text(`Número de transações: ${filteredExpenses.length}`, 20, yPosition)
     yPosition += 15
 
-    // Tabela de despesas
-    pdf.setFontSize(10)
-    const columns = ['Data', 'Descrição', 'Categoria', 'Valor']
-    const rows = filteredExpenses.map(exp => [
-      new Date(exp.expense_date).toLocaleDateString('pt-PT'),
-      exp.description.substring(0, 20),
-      exp.category_name || 'N/A',
-      `€${Number(exp.amount).toFixed(2)}`
-    ])
+    // Agrupar por categoria
+    const groups = groupByCategory(filteredExpenses)
+    const totals = Object.entries(groups).map(([category, expenses]) => ({
+      category,
+      expenses,
+      total: expenses.reduce((sum, exp) => sum + Number(exp.amount), 0)
+    })).sort((a, b) => b.total - a.total)
 
-    pdf.setTextColor(255, 255, 255)
-    pdf.setFillColor(59, 130, 246)
-
-    // Cabeçalhos da tabela
-    let xPos = 20
-    columns.forEach((col, idx) => {
-      const width = idx === 1 ? 80 : 35
-      pdf.rect(xPos, yPosition - 5, width, 8, 'F')
-      pdf.text(col, xPos + 2, yPosition)
-      xPos += width
-    })
-
-    pdf.setTextColor(0, 0, 0)
-    yPosition += 12
-
-    // Linhas da tabela
-    rows.forEach(row => {
-      if (yPosition > pageHeight - 50) {
+    // Para cada categoria
+    totals.forEach(({ category, expenses, total: categoryTotal }) => {
+      // Verificar se precisa de nova página
+      if (yPosition > pageHeight - 60) {
         pdf.addPage()
         yPosition = 20
       }
 
-      xPos = 20
-      let colIdx = 0
-      row.forEach(cell => {
-        const width = colIdx === 1 ? 80 : 35
-        pdf.text(cell, xPos + 2, yPosition)
-        xPos += width
-        colIdx++
+      // Cabeçalho da categoria
+      pdf.setFontSize(12)
+      pdf.setFillColor(240, 240, 240)
+      pdf.rect(20, yPosition - 5, pageWidth - 40, 10, 'F')
+      pdf.setTextColor(0, 0, 0)
+      pdf.text(category.toUpperCase(), 22, yPosition)
+      pdf.text(`€${categoryTotal.toFixed(2)} (${expenses.length} despesa${expenses.length > 1 ? 's' : ''})`, pageWidth - 22, yPosition, { align: 'right' })
+      yPosition += 12
+
+      // Tabela de despesas da categoria
+      pdf.setFontSize(9)
+      const columns = ['Data', 'Descrição', 'IVA', 'Valor']
+
+      // Cabeçalhos
+      pdf.setTextColor(255, 255, 255)
+      pdf.setFillColor(59, 130, 246)
+      let xPos = 20
+      const widths = [30, 85, 20, 30]
+      columns.forEach((col, idx) => {
+        pdf.rect(xPos, yPosition - 5, widths[idx], 7, 'F')
+        pdf.text(col, xPos + 2, yPosition)
+        xPos += widths[idx]
       })
-      yPosition += 8
+      pdf.setTextColor(0, 0, 0)
+      yPosition += 9
+
+      // Linhas
+      expenses.forEach(exp => {
+        if (yPosition > pageHeight - 30) {
+          pdf.addPage()
+          yPosition = 20
+        }
+
+        xPos = 20
+        const cells = [
+          new Date(exp.expense_date).toLocaleDateString('pt-PT'),
+          exp.description.substring(0, 40),
+          exp.vat_percentage ? `${Number(exp.vat_percentage)}%` : 'Isento',
+          `€${Number(exp.amount).toFixed(2)}`
+        ]
+
+        cells.forEach((cell, idx) => {
+          pdf.text(cell, xPos + 2, yPosition)
+          xPos += widths[idx]
+        })
+        yPosition += 6
+      })
+
+      yPosition += 5
     })
 
     // Miniaturas de faturas
@@ -235,17 +286,135 @@ export default function Relatorio() {
         yPosition += 10
 
         for (const attachment of expense.attachments) {
-          if (yPosition > pageHeight - 60) {
+          if (yPosition > pageHeight - 80) {
             pdf.addPage()
             yPosition = 20
           }
 
+          // Garantir que o caminho seja absoluto
+          const imgPath = attachment.file_path.startsWith('/')
+            ? attachment.file_path
+            : `/${attachment.file_path}`
+
+          console.log('Processando anexo para PDF:', imgPath)
+
+          // Detectar formato da imagem pela extensão
+          const ext = imgPath.toLowerCase()
+          const isPDF = ext.endsWith('.pdf')
+
           try {
-            const img = attachment.file_path
-            pdf.addImage(img, 'JPEG', 20, yPosition, 170, 60)
+            let imageDataUrl: string | null = null
+
+            // Verificar se a imagem já está em formato data URL (base64)
+            if (imgPath.startsWith('data:')) {
+              // Já é base64, usar diretamente
+              console.log('Anexo em formato base64')
+              imageDataUrl = imgPath
+            } else if (isPDF) {
+              // Converter PDF para imagem usando API do servidor
+              console.log('Anexo é PDF, convertendo para imagem via API:', imgPath)
+
+              try {
+                const token = localStorage.getItem('token')
+                const response = await fetch('/api/pdf-to-image', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                  },
+                  body: JSON.stringify({ pdfPath: imgPath })
+                })
+
+                if (!response.ok) {
+                  throw new Error(`Falha na conversão: ${response.status}`)
+                }
+
+                const data = await response.json()
+                imageDataUrl = data.dataUrl
+                console.log('PDF convertido para imagem com sucesso via API')
+              } catch (pdfError) {
+                console.error('Erro ao converter PDF:', pdfError)
+                // Fallback: mostrar mensagem
+                pdf.setFontSize(9)
+                pdf.setTextColor(255, 0, 0)
+                const fileName = attachment.file_name || imgPath.split('/').pop() || 'documento.pdf'
+                pdf.text(`[Erro ao converter PDF: ${fileName}]`, 22, yPosition)
+                pdf.setTextColor(0, 0, 0)
+                yPosition += 8
+                continue
+              }
+            } else {
+              // Carregar imagem normal do servidor
+              const imgUrl = `${window.location.origin}${imgPath}`
+              console.log('Carregando imagem de:', imgUrl)
+
+              // Tentar carregar a imagem
+              const img = new Image()
+              img.crossOrigin = 'anonymous'
+
+              imageDataUrl = await new Promise<string>((resolve, reject) => {
+                img.onload = () => {
+                  try {
+                    console.log('Imagem carregada com sucesso:', imgUrl)
+                    // Converter para canvas e depois para data URL
+                    const canvas = document.createElement('canvas')
+
+                    // Calcular dimensões mantendo aspect ratio
+                    const maxWidth = 1200
+                    const maxHeight = 800
+                    let width = img.width
+                    let height = img.height
+
+                    if (width > maxWidth) {
+                      height = (height * maxWidth) / width
+                      width = maxWidth
+                    }
+                    if (height > maxHeight) {
+                      width = (width * maxHeight) / height
+                      height = maxHeight
+                    }
+
+                    canvas.width = width
+                    canvas.height = height
+                    const ctx = canvas.getContext('2d')
+                    if (!ctx) {
+                      reject(new Error('Falha ao obter contexto do canvas'))
+                      return
+                    }
+
+                    ctx.drawImage(img, 0, 0, width, height)
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+
+                    console.log('Imagem processada com sucesso')
+                    resolve(dataUrl)
+                  } catch (err) {
+                    console.error('Erro ao processar imagem:', err)
+                    reject(err)
+                  }
+                }
+                img.onerror = (err) => {
+                  console.error('Erro ao carregar imagem:', imgUrl, err)
+                  reject(new Error('Falha ao carregar imagem'))
+                }
+                img.src = imgUrl
+              })
+            }
+
+            // Adicionar imagem ao PDF
+            if (imageDataUrl) {
+              pdf.addImage(imageDataUrl, 'JPEG', 20, yPosition, 170, 60)
+              console.log('Imagem adicionada ao PDF com sucesso')
+            }
+
             yPosition += 70
           } catch (err) {
-            console.error('Erro ao adicionar imagem:', err)
+            console.error('Erro ao adicionar anexo ao PDF:', err, attachment)
+            // Adicionar texto indicando que houve erro
+            pdf.setFontSize(8)
+            pdf.setTextColor(255, 0, 0)
+            pdf.text(`[Anexo não disponível: ${attachment.file_path}]`, 20, yPosition)
+            pdf.setTextColor(0, 0, 0)
+            yPosition += 10
           }
         }
 
@@ -257,21 +426,44 @@ export default function Relatorio() {
   }
 
   const generateCSV = () => {
-    const headers = ['Data', 'Descrição', 'Categoria', 'Valor', 'IVA %']
-    const rows = filteredExpenses.map(exp => [
-      new Date(exp.expense_date).toLocaleDateString('pt-PT'),
-      exp.description,
-      exp.category_name || 'N/A',
-      Number(exp.amount).toFixed(2),
-      Number(exp.vat_percentage || 0)
-    ])
+    const headers = ['Categoria', 'Data', 'Descrição', 'IVA %', 'Valor']
 
-    const csv = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n')
+    // Agrupar por categoria
+    const groups = groupByCategory(filteredExpenses)
+    const totals = Object.entries(groups).map(([category, expenses]) => ({
+      category,
+      expenses,
+      total: expenses.reduce((sum, exp) => sum + Number(exp.amount), 0)
+    })).sort((a, b) => b.total - a.total)
 
-    const blob = new Blob([csv], { type: 'text/csv' })
+    // Construir CSV com agrupamento
+    const csvLines: string[] = [headers.join(',')]
+
+    totals.forEach(({ category, expenses, total: categoryTotal }) => {
+      // Linha de cabeçalho da categoria
+      csvLines.push(`"${category}","","","","€${categoryTotal.toFixed(2)}"`)
+
+      // Linhas de despesas
+      expenses.forEach(exp => {
+        csvLines.push([
+          `"${category}"`,
+          `"${new Date(exp.expense_date).toLocaleDateString('pt-PT')}"`,
+          `"${exp.description}"`,
+          `"${exp.vat_percentage ? Number(exp.vat_percentage) + '%' : 'Isento'}"`,
+          `"€${Number(exp.amount).toFixed(2)}"`
+        ].join(','))
+      })
+
+      // Linha em branco após cada categoria
+      csvLines.push('')
+    })
+
+    // Linha de total geral
+    const totalGeral = filteredExpenses.reduce((sum, exp) => sum + Number(exp.amount), 0)
+    csvLines.push(`"TOTAL GERAL","","","","€${totalGeral.toFixed(2)}"`)
+
+    const csv = csvLines.join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -365,57 +557,78 @@ export default function Relatorio() {
             </div>
           </div>
 
-          {/* Tabela de despesas */}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-100 border-b">
-                <tr>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-gray-700">Data</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-gray-700">Descrição</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-gray-700">Categoria</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-gray-700">IVA</th>
-                  <th className="px-6 py-3 text-right text-sm font-bold text-gray-700">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredExpenses.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-4 text-center text-gray-600">
-                      Nenhuma despesa registada neste período
-                    </td>
-                  </tr>
-                ) : (
-                  filteredExpenses.map((expense) => (
-                    <tr key={expense.id} className="border-b hover:bg-gray-50">
-                      <td className="px-6 py-4 text-sm">
-                        {new Date(expense.expense_date).toLocaleDateString('pt-PT')}
-                      </td>
-                      <td className="px-6 py-4 text-sm font-medium">{expense.description}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {expense.category_name || 'Sem categoria'}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {expense.vat_percentage ? `${Number(expense.vat_percentage)}%` : 'Isento'}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-right font-bold text-green-600">
-                        €{Number(expense.amount).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-              <tfoot className="bg-gray-50 border-t-2">
-                <tr>
-                  <td colSpan={4} className="px-6 py-4 text-right font-bold text-gray-900">
-                    Total:
-                  </td>
-                  <td className="px-6 py-4 text-right font-bold text-lg text-green-600">
-                    €{filteredExpenses.reduce((sum, exp) => sum + Number(exp.amount), 0).toFixed(2)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+          {/* Resumo por categoria */}
+          {filteredExpenses.length === 0 ? (
+            <div className="text-center py-8 text-gray-600">
+              Nenhuma despesa registada neste período
+            </div>
+          ) : (
+            <>
+              {/* Card de resumo total */}
+              <div className="mb-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-sm opacity-90">Total Geral</p>
+                    <p className="text-3xl font-bold">
+                      €{filteredExpenses.reduce((sum, exp) => sum + Number(exp.amount), 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm opacity-90">Nº de Despesas</p>
+                    <p className="text-2xl font-bold">{filteredExpenses.length}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabelas agrupadas por categoria */}
+              <div className="space-y-6">
+                {categoryTotals.map(({ category, expenses, total }) => (
+                  <div key={category} className="border border-gray-200 rounded-lg overflow-hidden">
+                    {/* Cabeçalho da categoria */}
+                    <div className="bg-gray-100 px-6 py-4 border-b border-gray-300">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-bold text-gray-900">{category}</h3>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-600">{expenses.length} despesa(s)</p>
+                          <p className="text-xl font-bold text-blue-600">€{total.toFixed(2)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Tabela de despesas da categoria */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Data</th>
+                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Descrição</th>
+                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">IVA</th>
+                            <th className="px-6 py-3 text-right text-xs font-bold text-gray-700 uppercase">Valor</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {expenses.map((expense) => (
+                            <tr key={expense.id} className="border-b hover:bg-gray-50">
+                              <td className="px-6 py-4 text-sm">
+                                {new Date(expense.expense_date).toLocaleDateString('pt-PT')}
+                              </td>
+                              <td className="px-6 py-4 text-sm font-medium">{expense.description}</td>
+                              <td className="px-6 py-4 text-sm text-gray-600">
+                                {expense.vat_percentage ? `${Number(expense.vat_percentage)}%` : 'Isento'}
+                              </td>
+                              <td className="px-6 py-4 text-sm text-right font-bold text-green-600">
+                                €{Number(expense.amount).toFixed(2)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

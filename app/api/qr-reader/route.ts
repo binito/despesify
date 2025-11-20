@@ -116,10 +116,10 @@ const handler = async (req: NextRequest, context: any) => {
 
       const expenseData = {
         description: `Fatura ${qrData.numero_documento || ''}`,
-        // Use base tributável as the amount (without VAT)
-        amount: baseTributavel > 0 ? baseTributavel.toString() : qrData.valor_total?.toString() || '',
+        // Use total amount (base + IVA)
+        amount: valorTotal.toString(),
         date: qrData.data_emissao || new Date().toISOString().split('T')[0],
-        vat_percentage: extractMainVATRate(qrData.linhas_iva),
+        vat_value: valorIva > 0 ? valorIva.toString() : '',
         nif_emitente: qrData.nif_emitente,
         nif_adquirente: qrData.nif_adquirente,
         atcud: qrData.atcud,
