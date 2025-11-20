@@ -175,27 +175,63 @@ class LeitorQRFaturaAT:
                     fatura['atcud'] = valor
                 elif chave.startswith('I'):
                     # Linhas de IVA (I1, I2, I3, I4...)
-                    # I1 = país, I2 = base tributável, I3 = total IVA, I4 = taxa IVA (ISE, RED, etc)
-                    num_linha = chave[1] if len(chave) > 1 else '1'
-                    
-                    if num_linha not in linhas_iva_temp:
-                        linhas_iva_temp[num_linha] = {}
-                    
-                    # I seguido de número e depois subcampo
-                    if len(chave) > 2:
-                        subcampo = chave[2:]
-                        if subcampo == '1':
-                            linhas_iva_temp[num_linha]['pais'] = valor
-                        elif subcampo == '2':
-                            linhas_iva_temp[num_linha]['base_tributavel'] = float(valor)
-                        elif subcampo == '3':
-                            linhas_iva_temp[num_linha]['valor_iva'] = float(valor)
-                        elif subcampo == '4':
-                            linhas_iva_temp[num_linha]['taxa_iva_codigo'] = valor
-                            linhas_iva_temp[num_linha]['taxa_iva_percentagem'] = self.taxas_iva_pt.get(valor, 0)
-                    else:
-                        # Apenas I seguido de número - pode ser formato alternativo
-                        linhas_iva_temp[num_linha]['info'] = valor
+                    # Formato pode variar: I1, I2, I3, I4 ou I7, I8, etc
+                    # I1 = país, I2 = base tributável, I3 = total IVA, I4 = taxa IVA
+                    # Mas também pode ser: I7 = base, I8 = iva
+
+                    # Extrair o número depois de 'I'
+                    numero_str = chave[1:]
+
+                    try:
+                        numero = int(numero_str)
+
+                        # Mapear campos conhecidos
+                        if numero == 1 or numero == 7:  # País ou Base Tributável
+                            # Se for valor numérico, é base. Se for PT/ES/etc, é país
+                            try:
+                                float(valor)
+                                # É base tributável
+                                if '1' not in linhas_iva_temp:
+                                    linhas_iva_temp['1'] = {}
+                                linhas_iva_temp['1']['base_tributavel'] = float(valor)
+                            except:
+                                # É país
+                                if '1' not in linhas_iva_temp:
+                                    linhas_iva_temp['1'] = {}
+                                linhas_iva_temp['1']['pais'] = valor
+
+                        elif numero == 2 or numero == 8:  # Base ou IVA
+                            # Se houver I7 (base), I8 será IVA
+                            try:
+                                float(valor)
+                                if numero == 2:
+                                    if '1' not in linhas_iva_temp:
+                                        linhas_iva_temp['1'] = {}
+                                    linhas_iva_temp['1']['base_tributavel'] = float(valor)
+                                elif numero == 8:
+                                    if '1' not in linhas_iva_temp:
+                                        linhas_iva_temp['1'] = {}
+                                    linhas_iva_temp['1']['valor_iva'] = float(valor)
+                            except:
+                                pass
+
+                        elif numero == 3:  # Total IVA
+                            try:
+                                if '1' not in linhas_iva_temp:
+                                    linhas_iva_temp['1'] = {}
+                                linhas_iva_temp['1']['valor_iva'] = float(valor)
+                            except:
+                                pass
+
+                        elif numero == 4:  # Taxa IVA
+                            if '1' not in linhas_iva_temp:
+                                linhas_iva_temp['1'] = {}
+                            linhas_iva_temp['1']['taxa_iva_codigo'] = valor
+                            linhas_iva_temp['1']['taxa_iva_percentagem'] = self.taxas_iva_pt.get(valor, 0)
+
+                    except:
+                        # Não conseguiu fazer parse, ignorar
+                        pass
                         
                 elif chave == 'N':
                     fatura['valor_total'] = float(valor)

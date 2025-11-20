@@ -112,9 +112,10 @@ const handler = async (req: NextRequest, context: any) => {
       // Extract base and IVA from first line (or sum if multiple lines)
       const baseTributavel = qrData.linhas_iva.reduce((sum, linha) => sum + (linha.base_tributavel || 0), 0)
       const valorIva = qrData.linhas_iva.reduce((sum, linha) => sum + (linha.valor_iva || 0), 0)
+      const valorTotal = baseTributavel + valorIva
 
       const expenseData = {
-        description: qrData.numero_documento,
+        description: `Fatura ${qrData.numero_documento || ''}`,
         // Use base tributável as the amount (without VAT)
         amount: baseTributavel > 0 ? baseTributavel.toString() : qrData.valor_total?.toString() || '',
         date: qrData.data_emissao || new Date().toISOString().split('T')[0],
@@ -124,6 +125,7 @@ const handler = async (req: NextRequest, context: any) => {
         atcud: qrData.atcud,
         base_tributavel: baseTributavel,
         valor_iva: valorIva,
+        valor_total: valorTotal,
         raw_qr_data: qrData
       }
 
