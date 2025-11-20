@@ -247,7 +247,17 @@ class LeitorQRFaturaAT:
             # Converter linhas de IVA para lista
             for num_linha in sorted(linhas_iva_temp.keys()):
                 fatura['linhas_iva'].append(linhas_iva_temp[num_linha])
-            
+
+            # Calcular valor total correto como base_tributavel + valor_iva
+            total_base = 0
+            total_iva = 0
+            for linha in fatura['linhas_iva']:
+                total_base += linha.get('base_tributavel', 0)
+                total_iva += linha.get('valor_iva', 0)
+
+            # Sobrescrever valor_total com o cálculo correto
+            fatura['valor_total'] = total_base + total_iva
+
             return fatura
             
         except Exception as e:
