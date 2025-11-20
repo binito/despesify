@@ -109,16 +109,21 @@ const handler = async (req: NextRequest, context: any) => {
       }
 
       // Transform QR data to match expense form fields
+      // Extract base and IVA from first line (or sum if multiple lines)
+      const baseTributavel = qrData.linhas_iva.reduce((sum, linha) => sum + (linha.base_tributavel || 0), 0)
+      const valorIva = qrData.linhas_iva.reduce((sum, linha) => sum + (linha.valor_iva || 0), 0)
+
       const expenseData = {
         description: qrData.numero_documento,
-        amount: qrData.valor_total?.toString() || '',
+        // Use base tributável as the amount (without VAT)
+        amount: baseTributavel > 0 ? baseTributavel.toString() : qrData.valor_total?.toString() || '',
         date: qrData.data_emissao || new Date().toISOString().split('T')[0],
         vat_percentage: extractMainVATRate(qrData.linhas_iva),
         nif_emitente: qrData.nif_emitente,
         nif_adquirente: qrData.nif_adquirente,
         atcud: qrData.atcud,
-        base_tributavel: qrData.linhas_iva[0]?.base_tributavel || 0,
-        valor_iva: qrData.linhas_iva.reduce((sum, linha) => sum + (linha.valor_iva || 0), 0),
+        base_tributavel: baseTributavel,
+        valor_iva: valorIva,
         raw_qr_data: qrData
       }
 
