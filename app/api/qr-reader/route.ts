@@ -160,6 +160,17 @@ function extractMainVATRate(linhas_iva: any[]): string {
     }
   }
 
+  // If taxa_iva_percentagem not set, calculate from base and iva
+  if (!mainLine.taxa_iva_percentagem || mainLine.taxa_iva_percentagem === 0) {
+    if (mainLine.base_tributavel && mainLine.valor_iva) {
+      const calculatedRate = (mainLine.valor_iva / mainLine.base_tributavel) * 100
+      // Round to nearest standard rate
+      if (calculatedRate > 20) return '23'
+      if (calculatedRate > 10) return '13'
+      if (calculatedRate > 0) return '6'
+    }
+  }
+
   return mainLine.taxa_iva_percentagem?.toString() || ''
 }
 
