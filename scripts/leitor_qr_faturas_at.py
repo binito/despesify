@@ -4,7 +4,13 @@ Extrai e descodifica informação estruturada dos códigos QR das faturas emitid
 """
 
 import cv2
-from pyzbar import pyzbar
+try:
+    from pyzbar import pyzbar
+    PYZBAR_AVAILABLE = True
+except ImportError:
+    PYZBAR_AVAILABLE = False
+    pyzbar = None
+
 import json
 from datetime import datetime
 from typing import Dict, Optional, List
@@ -44,40 +50,58 @@ class LeitorQRFaturaAT:
 
             print(f"Imagem carregada com sucesso. Dimensões: {imagem.shape}")
 
+            # Usar OpenCV QRCodeDetector (mais robusto)
+            qr_detector = cv2.QRCodeDetector()
+
             # Tentar detectar com imagem original
             print("Tentando detectar QR na imagem original...")
-            codigos_qr = pyzbar.decode(imagem)
+            decoded_text, points, straight_qr = qr_detector.detectAndDecode(imagem)
 
-            # Se não encontrar, tentar processar a imagem
-            if not codigos_qr:
-                print("QR não encontrado na imagem original. Tentando com processamento...")
-                # Converter para escala de cinzas
+            if decoded_text and len(decoded_text) > 0:
+                print(f"✓ QR encontrado!")
+                print(f"Dados do QR (primeiros 100 chars): {decoded_text[:100]}...")
+                return decoded_text
+
+            # Se não encontrar, tentar com rotações
+            print("QR não encontrado. Tentando com rotações...")
+            for angulo in [90, 180, 270]:
+                print(f"  Tentando rotação de {angulo}°...")
+                rotacionada = cv2.rotate(imagem, cv2.ROTATE_90_CLOCKWISE if angulo == 90 else
+                                       cv2.ROTATE_180 if angulo == 180 else
+                                       cv2.ROTATE_90_COUNTERCLOCKWISE)
+                decoded_text, points, straight_qr = qr_detector.detectAndDecode(rotacionada)
+                if decoded_text and len(decoded_text) > 0:
+                    print(f"  ✓ QR encontrado com rotação de {angulo}°")
+                    print(f"Dados do QR (primeiros 100 chars): {decoded_text[:100]}...")
+                    return decoded_text
+
+            # Se OpenCV não funcionar, tentar pyzbar como fallback
+            if PYZBAR_AVAILABLE:
+                print("OpenCV não encontrou. Tentando com pyzbar...")
+                codigos_qr = pyzbar.decode(imagem)
+
+                if codigos_qr:
+                    print(f"✓ {len(codigos_qr)} código(s) QR encontrado(s) com pyzbar")
+                    dados_qr = codigos_qr[0].data.decode('utf-8')
+                    print(f"Dados do QR (primeiros 100 chars): {dados_qr[:100]}...")
+                    return dados_qr
+
+                # Tentar com processamento
+                print("Tentando com processamento...")
                 cinzenta = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
                 codigos_qr = pyzbar.decode(cinzenta)
+                if codigos_qr:
+                    print(f"✓ {len(codigos_qr)} código(s) QR encontrado(s)")
+                    dados_qr = codigos_qr[0].data.decode('utf-8')
+                    print(f"Dados do QR (primeiros 100 chars): {dados_qr[:100]}...")
+                    return dados_qr
 
-            # Se ainda não encontrar, tentar com contraste aumentado
-            if not codigos_qr:
-                print("Tentando com contraste aumentado...")
-                cinzenta = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
-                # Aumentar contraste
-                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-                contraste = clahe.apply(cinzenta)
-                codigos_qr = pyzbar.decode(contraste)
-
-            if not codigos_qr:
-                print("⚠ Nenhum código QR encontrado na imagem")
-                print("Dica: Certifique-se de que:")
-                print("  - O QR code está visível e legível")
-                print("  - A imagem tem boa qualidade")
-                print("  - O QR não está cortado ou muito distorcido")
-                return None
-
-            print(f"✓ {len(codigos_qr)} código(s) QR encontrado(s)")
-
-            # Retornar o primeiro código QR encontrado
-            dados_qr = codigos_qr[0].data.decode('utf-8')
-            print(f"Dados do QR (primeiros 100 chars): {dados_qr[:100]}...")
-            return dados_qr
+            print("⚠ Nenhum código QR encontrado na imagem")
+            print("Dica: Certifique-se de que:")
+            print("  - O QR code está visível e legível")
+            print("  - A imagem tem boa qualidade")
+            print("  - O QR não está cortado ou muito distorcido")
+            return None
 
         except Exception as e:
             print(f"Erro ao ler QR code: {e}")
