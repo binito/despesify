@@ -26,34 +26,63 @@ class LeitorQRFaturaAT:
     def ler_qr_de_imagem(self, caminho_imagem: str) -> Optional[str]:
         """
         Lê o código QR de uma imagem de fatura
-        
+
         Args:
             caminho_imagem: Caminho para o ficheiro de imagem
-            
+
         Returns:
             String com os dados do QR ou None se não encontrar
         """
         try:
+            print(f"Lendo imagem: {caminho_imagem}")
             # Ler a imagem
             imagem = cv2.imread(caminho_imagem)
-            
+
             if imagem is None:
                 print(f"Erro: Não foi possível ler a imagem {caminho_imagem}")
                 return None
-            
-            # Detectar códigos QR na imagem
+
+            print(f"Imagem carregada com sucesso. Dimensões: {imagem.shape}")
+
+            # Tentar detectar com imagem original
+            print("Tentando detectar QR na imagem original...")
             codigos_qr = pyzbar.decode(imagem)
-            
+
+            # Se não encontrar, tentar processar a imagem
             if not codigos_qr:
-                print("Nenhum código QR encontrado na imagem")
+                print("QR não encontrado na imagem original. Tentando com processamento...")
+                # Converter para escala de cinzas
+                cinzenta = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
+                codigos_qr = pyzbar.decode(cinzenta)
+
+            # Se ainda não encontrar, tentar com contraste aumentado
+            if not codigos_qr:
+                print("Tentando com contraste aumentado...")
+                cinzenta = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
+                # Aumentar contraste
+                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+                contraste = clahe.apply(cinzenta)
+                codigos_qr = pyzbar.decode(contraste)
+
+            if not codigos_qr:
+                print("⚠ Nenhum código QR encontrado na imagem")
+                print("Dica: Certifique-se de que:")
+                print("  - O QR code está visível e legível")
+                print("  - A imagem tem boa qualidade")
+                print("  - O QR não está cortado ou muito distorcido")
                 return None
-            
+
+            print(f"✓ {len(codigos_qr)} código(s) QR encontrado(s)")
+
             # Retornar o primeiro código QR encontrado
             dados_qr = codigos_qr[0].data.decode('utf-8')
+            print(f"Dados do QR (primeiros 100 chars): {dados_qr[:100]}...")
             return dados_qr
-            
+
         except Exception as e:
             print(f"Erro ao ler QR code: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def descodificar_qr_fatura(self, dados_qr: str) -> Dict:

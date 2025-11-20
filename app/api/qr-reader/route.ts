@@ -72,17 +72,24 @@ const handler = async (req: NextRequest, context: any) => {
       // Execute Python script
       let output = ''
       try {
+        console.log(`Executing: python3 "${pythonScript}" "${imagePath}" --json /tmp/qr-output-${timestamp}.json`)
         output = execSync(`python3 "${pythonScript}" "${imagePath}" --json /tmp/qr-output-${timestamp}.json`, {
           encoding: 'utf-8',
-          stdio: ['pipe', 'pipe', 'pipe']
+          timeout: 30000,
+          maxBuffer: 10 * 1024 * 1024
         })
+        console.log('Python output:', output)
       } catch (error: any) {
-        console.error('Python execution error:', error.stderr || error.message)
+        console.error('Python execution error:')
+        console.error('stderr:', error.stderr)
+        console.error('stdout:', error.stdout)
+        console.error('message:', error.message)
       }
 
       // Check if JSON output file was created
       const jsonPath = `/tmp/qr-output-${timestamp}.json`
       if (!existsSync(jsonPath)) {
+        console.error('JSON output file not created. Python likely failed to find QR code.')
         return NextResponse.json(
           { message: 'Nenhum código QR encontrado na imagem' },
           { status: 400 }
