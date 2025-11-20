@@ -204,6 +204,7 @@ export default function NovaDespesa() {
       })
 
       const data = await res.json()
+      console.log('QR Response:', data)
       if (data.qr_data) {
         setQrData(data.qr_data)
         setQrReadSuccess(true)

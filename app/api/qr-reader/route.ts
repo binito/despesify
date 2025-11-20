@@ -129,6 +129,10 @@ const handler = async (req: NextRequest, context: any) => {
         raw_qr_data: qrData
       }
 
+      console.log('QR Data Extraction Result:')
+      console.log('Date from QR:', qrData.data_emissao)
+      console.log('Final expense data:', expenseData)
+
       return NextResponse.json({ qr_data: expenseData }, { status: 200 })
     } finally {
       // Clean up temp image file
