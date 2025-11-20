@@ -42,6 +42,7 @@ export default function NovaDespesa() {
   const [numeroDocumento, setNumeroDocumento] = useState('')
   const [atcud, setAtcud] = useState('')
   const [baseTributavel, setBaseTributavel] = useState('')
+  const [qrReadSuccess, setQrReadSuccess] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -52,6 +53,22 @@ export default function NovaDespesa() {
     }
     fetchCategories(token)
   }, [])
+
+  // Fazer OCR só se QR falhou e temos ficheiros
+  useEffect(() => {
+    let timer: NodeJS.Timeout
+    if (!qrReadSuccess && files && files.length > 0 && files[0].type.startsWith('image/')) {
+      // Delay para garantir que performQRRead já foi executado
+      timer = setTimeout(() => {
+        if (!qrReadSuccess) {
+          performOCR(files[0])
+        }
+      }, 1000)
+    }
+    return () => {
+      if (timer) clearTimeout(timer)
+    }
+  }, [qrReadSuccess, files])
 
   const fetchCategories = async (token: string) => {
     try {
@@ -124,9 +141,10 @@ export default function NovaDespesa() {
         }
       }
 
-      // OCR na primeira imagem
+      // Tentar QR na primeira imagem (OCR só depois se QR falhar)
       if (selectedFiles[0].type.startsWith('image/')) {
-        await performOCR(selectedFiles[0])
+        setQrReadSuccess(false)
+        await performQRRead(selectedFiles[0])
       }
     }
   }
@@ -202,6 +220,7 @@ export default function NovaDespesa() {
       const data = await res.json()
       if (data.qr_data) {
         setQrData(data.qr_data)
+        setQrReadSuccess(true)
 
         // Preencher campos automaticamente do QR
         const updates: string[] = []
@@ -243,6 +262,7 @@ export default function NovaDespesa() {
           setTimeout(() => setOcrMessage(''), 5000)
         }
       } else if (showMessage) {
+        setQrReadSuccess(false)
         setOcrMessage('⚠ Nenhum código QR encontrado na imagem')
         setTimeout(() => setOcrMessage(''), 3000)
       }
