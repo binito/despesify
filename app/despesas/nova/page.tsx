@@ -36,6 +36,12 @@ export default function NovaDespesa() {
   const [showNewCategory, setShowNewCategory] = useState(false)
   const [selectedFile, setSelectedFile] = useState<FilePreview | null>(null)
   const [ocrMessage, setOcrMessage] = useState('')
+  const [qrData, setQrData] = useState<any>(null)
+  const [nifEmitente, setNifEmitente] = useState('')
+  const [nifAdquirente, setNifAdquirente] = useState('')
+  const [numeroDocumento, setNumeroDocumento] = useState('')
+  const [atcud, setAtcud] = useState('')
+  const [baseTributavel, setBaseTributavel] = useState('')
   const router = useRouter()
 
   useEffect(() => {
@@ -180,11 +186,89 @@ export default function NovaDespesa() {
     }
   }
 
+  const performQRRead = async (file: File, showMessage: boolean = false) => {
+    try {
+      if (showMessage) setOcrLoading(true)
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/qr-reader', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      })
+
+      const data = await res.json()
+      if (data.qr_data) {
+        setQrData(data.qr_data)
+
+        // Preencher campos automaticamente do QR
+        const updates: string[] = []
+        if (data.qr_data.amount) {
+          setAmount(data.qr_data.amount)
+          updates.push('Valor')
+        }
+        if (data.qr_data.description) {
+          setDescription(data.qr_data.description)
+          updates.push('Documento')
+        }
+        if (data.qr_data.date) {
+          setDate(data.qr_data.date)
+          updates.push('Data')
+        }
+        if (data.qr_data.vat_percentage) {
+          setVatPercentage(data.qr_data.vat_percentage)
+          updates.push('IVA')
+        }
+        if (data.qr_data.nif_emitente) {
+          setNifEmitente(data.qr_data.nif_emitente)
+          updates.push('NIF Emitente')
+        }
+        if (data.qr_data.nif_adquirente) {
+          setNifAdquirente(data.qr_data.nif_adquirente)
+          updates.push('NIF Adquirente')
+        }
+        if (data.qr_data.atcud) {
+          setAtcud(data.qr_data.atcud)
+          updates.push('ATCUD')
+        }
+        if (data.qr_data.base_tributavel) {
+          setBaseTributavel(data.qr_data.base_tributavel)
+          updates.push('Base Tributável')
+        }
+
+        if (showMessage) {
+          setOcrMessage(`✓ QR lido com sucesso! Preenchidos: ${updates.join(', ')}`)
+          setTimeout(() => setOcrMessage(''), 5000)
+        }
+      } else if (showMessage) {
+        setOcrMessage('⚠ Nenhum código QR encontrado na imagem')
+        setTimeout(() => setOcrMessage(''), 3000)
+      }
+    } catch (err) {
+      console.error('Erro ao ler QR:', err)
+      if (showMessage) {
+        setOcrMessage('❌ Erro ao processar imagem')
+        setTimeout(() => setOcrMessage(''), 3000)
+      }
+    } finally {
+      if (showMessage) setOcrLoading(false)
+    }
+  }
+
   const handleManualOCR = async (preview: FilePreview) => {
     // Converter preview de volta para File
     const blob = await fetch(preview.data).then(r => r.blob())
     const file = new File([blob], preview.name, { type: preview.type === 'image' ? 'image/jpeg' : 'application/pdf' })
     await performOCR(file, true)
+  }
+
+  const handleManualQRRead = async (preview: FilePreview) => {
+    // Converter preview de volta para File
+    const blob = await fetch(preview.data).then(r => r.blob())
+    const file = new File([blob], preview.name, { type: 'image/jpeg' })
+    await performQRRead(file, true)
   }
 
   const handleCreateCategory = async () => {
@@ -243,6 +327,12 @@ export default function NovaDespesa() {
         }
       }
       if (ocrData) formData.append('ocr_data', JSON.stringify(ocrData))
+      if (qrData) formData.append('qr_data', JSON.stringify(qrData))
+      if (nifEmitente) formData.append('nif_emitente', nifEmitente)
+      if (nifAdquirente) formData.append('nif_adquirente', nifAdquirente)
+      if (numeroDocumento) formData.append('numero_documento', numeroDocumento)
+      if (atcud) formData.append('atcud', atcud)
+      if (baseTributavel) formData.append('base_tributavel', baseTributavel)
 
       const res = await fetch('/api/despesas', {
         method: 'POST',
@@ -292,6 +382,12 @@ export default function NovaDespesa() {
       {ocrData && (
         <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
           ✓ Dados extraídos da fatura. Reveja e ajuste conforme necessário.
+        </div>
+      )}
+
+      {qrData && (
+        <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4">
+          ✓ Dados extraídos do código QR da fatura AT. Reveja e ajuste conforme necessário.
         </div>
       )}
 
@@ -459,6 +555,83 @@ export default function NovaDespesa() {
                 rows={3}
               />
             </div>
+
+            {qrData && (
+              <div className="mb-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h3 className="text-lg font-bold text-blue-900 mb-4">Dados do QR Code AT</h3>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-2">
+                      NIF Emitente
+                    </label>
+                    <input
+                      type="text"
+                      value={nifEmitente}
+                      onChange={(e) => setNifEmitente(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                      placeholder="NIF do emitente"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-2">
+                      NIF Adquirente
+                    </label>
+                    <input
+                      type="text"
+                      value={nifAdquirente}
+                      onChange={(e) => setNifAdquirente(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                      placeholder="NIF do adquirente"
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-gray-700 font-bold mb-2">
+                    Número do Documento
+                  </label>
+                  <input
+                    type="text"
+                    value={numeroDocumento}
+                    onChange={(e) => setNumeroDocumento(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                    placeholder="Número do documento (ex: FT 2024/123)"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-2">
+                      ATCUD
+                    </label>
+                    <input
+                      type="text"
+                      value={atcud}
+                      onChange={(e) => setAtcud(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                      placeholder="Código ATCUD"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-2">
+                      Base Tributável (€)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={baseTributavel}
+                      onChange={(e) => setBaseTributavel(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Coluna 2: Upload e Preview */}
@@ -512,16 +685,27 @@ export default function NovaDespesa() {
                         )}
                       </button>
 
-                      {/* Botão de OCR sobreposto */}
-                      <button
-                        type="button"
-                        onClick={() => handleManualOCR(preview)}
-                        disabled={ocrLoading}
-                        className="absolute bottom-2 right-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-3 py-1 rounded text-sm font-bold shadow-lg transition-all"
-                        title="Executar OCR neste ficheiro"
-                      >
-                        {ocrLoading ? '⏳' : '🔍 OCR'}
-                      </button>
+                      {/* Botões de OCR e QR sobrepostos */}
+                      <div className="absolute bottom-2 right-2 flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleManualQRRead(preview)}
+                          disabled={ocrLoading}
+                          className="bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 text-white px-2 py-1 rounded text-xs font-bold shadow-lg transition-all"
+                          title="Ler código QR da fatura AT"
+                        >
+                          {ocrLoading ? '⏳' : '📱 QR'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleManualOCR(preview)}
+                          disabled={ocrLoading}
+                          className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-2 py-1 rounded text-xs font-bold shadow-lg transition-all"
+                          title="Executar OCR neste ficheiro"
+                        >
+                          {ocrLoading ? '⏳' : '🔍 OCR'}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
