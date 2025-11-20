@@ -114,12 +114,61 @@ const handler = async (req: NextRequest, context: any) => {
       const valorIva = qrData.linhas_iva.reduce((sum, linha) => sum + (linha.valor_iva || 0), 0)
       const valorTotal = baseTributavel + valorIva
 
+      // Tentar obter o nome da empresa e categoria através do NIF
+      let companyName = 'Fatura'
+      let categoryId = null
+      if (qrData.nif_emitente) {
+        console.log(`A procurar NIF emitente: ${qrData.nif_emitente}`)
+        try {
+          // Use localhost for internal calls to avoid SSL issues
+          const apiUrl = process.env.NODE_ENV === 'development'
+            ? 'http://localhost:8520/api/nif-lookup'
+            : `${new URL(req.url).origin}/api/nif-lookup`
+
+          console.log(`Calling NIF lookup API: ${apiUrl}`)
+          const nifLookupRes = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': req.headers.get('Authorization') || ''
+            },
+            body: JSON.stringify({ nif: qrData.nif_emitente })
+          })
+
+          console.log(`NIF lookup response status: ${nifLookupRes.status}`)
+
+          if (nifLookupRes.ok) {
+            const nifData = await nifLookupRes.json()
+            console.log('NIF lookup response data:', nifData)
+            if (nifData.company_name) {
+              companyName = nifData.company_name
+              console.log(`✓ Nome da empresa obtido: ${companyName}`)
+            } else {
+              console.warn('⚠ NIF lookup OK mas company_name vazio')
+            }
+            if (nifData.category_id) {
+              categoryId = nifData.category_id
+              console.log(`✓ Categoria obtida da cache: ${categoryId}`)
+            }
+          } else {
+            const errorData = await nifLookupRes.json()
+            console.error(`✗ NIF lookup falhou com status ${nifLookupRes.status}:`, errorData)
+          }
+        } catch (err) {
+          console.error('✗ Erro ao fazer NIF lookup:', err)
+        }
+      } else {
+        console.warn('⚠ NIF emitente não encontrado no QR code')
+      }
+
       const expenseData = {
-        description: `Fatura ${qrData.numero_documento || ''}`,
+        description: companyName,
         // Use total amount (base + IVA)
         amount: valorTotal.toString(),
         date: qrData.data_emissao || new Date().toISOString().split('T')[0],
         vat_value: valorIva > 0 ? valorIva.toString() : '',
+        category_id: categoryId,
+        numero_documento: qrData.numero_documento,
         nif_emitente: qrData.nif_emitente,
         nif_adquirente: qrData.nif_adquirente,
         atcud: qrData.atcud,
