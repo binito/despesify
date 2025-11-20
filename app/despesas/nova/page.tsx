@@ -54,21 +54,6 @@ export default function NovaDespesa() {
     fetchCategories(token)
   }, [])
 
-  // Fazer OCR só se QR falhou e temos ficheiros
-  useEffect(() => {
-    let timer: NodeJS.Timeout
-    if (!qrReadSuccess && files && files.length > 0 && files[0].type.startsWith('image/')) {
-      // Delay para garantir que performQRRead já foi executado
-      timer = setTimeout(() => {
-        if (!qrReadSuccess) {
-          performOCR(files[0])
-        }
-      }, 1000)
-    }
-    return () => {
-      if (timer) clearTimeout(timer)
-    }
-  }, [qrReadSuccess, files])
 
   const fetchCategories = async (token: string) => {
     try {
@@ -141,7 +126,7 @@ export default function NovaDespesa() {
         }
       }
 
-      // Tentar QR na primeira imagem (OCR só depois se QR falhar)
+      // Tentar QR na primeira imagem
       if (selectedFiles[0].type.startsWith('image/')) {
         setQrReadSuccess(false)
         await performQRRead(selectedFiles[0])
