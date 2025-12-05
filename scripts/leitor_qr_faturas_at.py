@@ -515,7 +515,7 @@ class LeitorQRFaturaAT:
 
 def main():
     """
-    Função principal que lê a imagem de um ficheiro e escreve o resultado JSON para ficheiro.
+    Função principal que lê a imagem de um ficheiro OU texto QR e escreve o resultado JSON para ficheiro.
     """
     leitor = LeitorQRFaturaAT()
     fatura = None
@@ -525,22 +525,50 @@ def main():
     try:
         # Verificar argumentos da linha de comando
         if len(sys.argv) < 2:
-            print(json.dumps({"error": "Utilização: python script.py <image_path> [--json <output_path>]"}))
+            print(json.dumps({"error": "Utilização: python script.py <image_path|--text text_path> [--json <output_path>]"}))
             sys.exit(1)
 
-        image_path = sys.argv[1]
+        # Check if --text argument is provided (for direct QR text processing)
+        if sys.argv[1] == '--text' and len(sys.argv) >= 3:
+            text_file = sys.argv[2]
+            if not os.path.exists(text_file):
+                print(json.dumps({"error": f"Ficheiro de texto QR não encontrado: {text_file}"}))
+                sys.exit(1)
 
-        # Verificar se a imagem existe
-        if not os.path.exists(image_path):
-            print(json.dumps({"error": f"Ficheiro de imagem não encontrado: {image_path}"}))
-            sys.exit(1)
+            # Read QR text from file
+            with open(text_file, 'r', encoding='utf-8') as f:
+                qr_text = f.read().strip()
 
-        # Processar a fatura a partir do ficheiro
-        fatura = leitor.processar_fatura(image_path)
+            # Decode QR text directly
+            fatura = leitor.descodificar_qr_fatura(qr_text)
+
+            # Handle --json output
+            if len(sys.argv) >= 5 and sys.argv[3] == '--json':
+                output_path = sys.argv[4]
+        else:
+            # Process from image file (original behavior)
+            image_path = sys.argv[1]
+
+            # Verificar se a imagem existe
+            if not os.path.exists(image_path):
+                print(json.dumps({"error": f"Ficheiro de imagem não encontrado: {image_path}"}))
+                sys.exit(1)
+
+            # Processar a fatura a partir do ficheiro
+            fatura = leitor.processar_fatura(image_path)
 
         if fatura:
             # Se houver um caminho de saída JSON, escrever para ficheiro
-            if len(sys.argv) >= 4 and sys.argv[2] == '--json':
+            if output_path:
+                try:
+                    with open(output_path, 'w', encoding='utf-8') as f:
+                        json.dump(fatura, f, ensure_ascii=False, indent=2)
+                    print(json.dumps({"success": "QR code processado com sucesso"}), file=sys.stderr)
+                except Exception as e:
+                    print(json.dumps({"error": f"Erro ao escrever ficheiro JSON: {str(e)}"}))
+                    sys.exit(1)
+            elif len(sys.argv) >= 4 and sys.argv[2] == '--json':
+                # Image mode with --json
                 output_path = sys.argv[3]
                 try:
                     with open(output_path, 'w', encoding='utf-8') as f:
@@ -554,7 +582,7 @@ def main():
                 print(json.dumps(fatura, ensure_ascii=False))
         else:
             # Retornar um erro JSON se a fatura não for processada
-            print(json.dumps({"error": "QR Code não encontrado ou ilegível na imagem."}))
+            print(json.dumps({"error": "QR Code não encontrado ou ilegível."}))
             sys.exit(1)
 
     except Exception as e:

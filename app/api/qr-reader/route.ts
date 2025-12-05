@@ -29,18 +29,88 @@ interface QRData {
   numero_certificado: string | null
 }
 
+async function processQRText(qrText: string) {
+  try {
+    // Use Python script to process QR text directly
+    const pythonScript = path.join(process.cwd(), 'scripts', 'leitor_qr_faturas_at.py')
+    const timestamp = Date.now()
+    const tempDir = os.tmpdir()
+    const jsonPath = path.join(tempDir, `qr-output-${timestamp}.json`)
+
+    // Create temporary JSON file to store raw QR text for processing
+    const tempInput = path.join(tempDir, `qr-text-${timestamp}.txt`)
+    writeFileSync(tempInput, qrText)
+
+    try {
+      // Call Python script with --text parameter
+      const output = execSync(
+        `python3 "${pythonScript}" --text "${tempInput}" --json "${jsonPath}"`,
+        {
+          encoding: 'utf-8',
+          timeout: 10000,
+          maxBuffer: 10 * 1024 * 1024
+        }
+      )
+      console.log('Python QR text processing output:', output)
+    } catch (error: any) {
+      console.error('Python execution error:', error.message)
+    }
+
+    // Check if JSON output exists
+    if (!existsSync(jsonPath)) {
+      // Cleanup
+      if (existsSync(tempInput)) unlinkSync(tempInput)
+
+      return NextResponse.json(
+        { message: 'Não foi possível processar o código QR' },
+        { status: 400 }
+      )
+    }
+
+    // Read the processed QR data
+    const qrDataJson = readFileSync(jsonPath, 'utf-8')
+    const qrData = JSON.parse(qrDataJson)
+
+    // Cleanup
+    if (existsSync(tempInput)) unlinkSync(tempInput)
+    if (existsSync(jsonPath)) unlinkSync(jsonPath)
+
+    return NextResponse.json({
+      success: true,
+      qr_data: qrData
+    })
+  } catch (error: any) {
+    console.error('Error processing QR text:', error)
+    return NextResponse.json(
+      { message: 'Erro ao processar QR: ' + error.message },
+      { status: 500 }
+    )
+  }
+}
+
 const handler = async (req: NextRequest, context: any) => {
   if (req.method !== 'POST') {
     return NextResponse.json({ message: 'Método não suportado' }, { status: 405 })
   }
 
   try {
+    // Check if it's QR text directly from camera scanner
+    const contentType = req.headers.get('content-type')
+    if (contentType?.includes('application/json')) {
+      const body = await req.json()
+      if (body.qr_text) {
+        // Process QR text directly
+        return await processQRText(body.qr_text)
+      }
+    }
+
+    // Otherwise, process as file upload
     const formData = await req.formData()
     const file = formData.get('file') as File
 
     if (!file) {
       return NextResponse.json(
-        { message: 'Ficheiro não fornecido' },
+        { message: 'Ficheiro ou qr_text não fornecido' },
         { status: 400 }
       )
     }

@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
+
+const QRScanner = dynamic(() => import('../../components/QRScanner'), { ssr: false })
 
 interface Category {
   id: number
@@ -44,6 +47,7 @@ export default function NovaDespesa() {
   const [atcud, setAtcud] = useState('')
   const [baseTributavel, setBaseTributavel] = useState('')
   const [qrReadSuccess, setQrReadSuccess] = useState(false)
+  const [showQRScanner, setShowQRScanner] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -187,6 +191,96 @@ export default function NovaDespesa() {
       }
     } finally {
       if (showMessage) setOcrLoading(false)
+    }
+  }
+
+  const handleQRScan = async (qrText: string) => {
+    try {
+      console.log('📱 handleQRScan called with:', qrText.substring(0, 100) + '...')
+      setOcrLoading(true)
+      setShowQRScanner(false)
+
+      const token = localStorage.getItem('token')
+      console.log('🔑 Token exists:', !!token)
+
+      const res = await fetch('/api/qr-reader', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ qr_text: qrText })
+      })
+
+      console.log('📡 API Response status:', res.status)
+      const data = await res.json()
+      console.log('📦 QR Response data:', data)
+
+      if (!res.ok) {
+        throw new Error(data.message || `Erro HTTP ${res.status}`)
+      }
+
+      if (data.qr_data) {
+        setQrData(data.qr_data)
+        setQrReadSuccess(true)
+
+        // Auto-fill form fields
+        const updates: string[] = []
+        if (data.qr_data.valor_total) {
+          setAmount(data.qr_data.valor_total)
+          updates.push('Valor Total')
+        }
+        if (data.qr_data.description) {
+          setDescription(data.qr_data.description)
+          updates.push('Descrição')
+        }
+        if (data.qr_data.date) {
+          setDate(data.qr_data.date)
+          updates.push('Data')
+        }
+        if (data.qr_data.valor_iva) {
+          setValorIva(data.qr_data.valor_iva)
+          updates.push('Valor IVA')
+        }
+        if (data.qr_data.linhas_iva && data.qr_data.linhas_iva.length > 0 && data.qr_data.linhas_iva[0].taxa_iva_percentagem !== undefined) {
+          setVatPercentage(String(data.qr_data.linhas_iva[0].taxa_iva_percentagem))
+          updates.push('Taxa IVA')
+        }
+        if (data.qr_data.nif_emitente) {
+          setNifEmitente(data.qr_data.nif_emitente)
+          updates.push('NIF Emitente')
+        }
+        if (data.qr_data.nif_adquirente) {
+          setNifAdquirente(data.qr_data.nif_adquirente)
+          updates.push('NIF Adquirente')
+        }
+        if (data.qr_data.atcud) {
+          setAtcud(data.qr_data.atcud)
+          updates.push('ATCUD')
+        }
+        if (data.qr_data.base_tributavel) {
+          setBaseTributavel(data.qr_data.base_tributavel)
+          updates.push('Base Tributável')
+        }
+        if (data.qr_data.numero_documento) {
+          setNumeroDocumento(data.qr_data.numero_documento)
+          updates.push('Número do Documento')
+        }
+
+        setOcrMessage(`🎉 QR digitalizado com sucesso! Preenchidos: ${updates.join(', ')}`)
+        setTimeout(() => setOcrMessage(''), 6000)
+      } else {
+        console.warn('⚠️ No qr_data in response')
+        setOcrMessage('⚠ Não foi possível processar o código QR - dados não encontrados')
+        setTimeout(() => setOcrMessage(''), 5000)
+      }
+    } catch (err: any) {
+      console.error('❌ Erro ao processar QR:', err)
+      console.error('Error details:', err.message)
+      setOcrMessage(`❌ Erro: ${err.message || 'Erro desconhecido'}`)
+      setTimeout(() => setOcrMessage(''), 5000)
+    } finally {
+      setOcrLoading(false)
     }
   }
 
@@ -671,6 +765,35 @@ export default function NovaDespesa() {
           <div>
             <h2 className="text-2xl font-black text-gray-800 mb-6 pb-3 border-b-2 border-gray-100">Fatura</h2>
 
+            {/* QR Scanner Button */}
+            <div className="mb-6">
+              <button
+                type="button"
+                onClick={() => setShowQRScanner(true)}
+                className="w-full bg-gradient-to-r from-purple-500 via-purple-600 to-indigo-600 hover:from-purple-600 hover:via-purple-700 hover:to-indigo-700 text-white p-6 rounded-2xl shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300 group"
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className="text-5xl group-hover:scale-110 transition-transform">📱</div>
+                  <div>
+                    <p className="font-black text-xl mb-1">Digitalizar QR Code</p>
+                    <p className="text-purple-100 text-sm">Abrir câmara para ler fatura AT instantaneamente</p>
+                  </div>
+                </div>
+              </button>
+              <div className="mt-3 text-center">
+                <p className="text-xs text-gray-500">✨ Novo! Deteção automática em tempo real</p>
+              </div>
+            </div>
+
+            <div className="relative mb-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-4 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 text-gray-500 font-medium">ou</span>
+              </div>
+            </div>
+
             <div className="mb-5">
               <label className="block text-gray-700 font-bold mb-2 text-sm">
                 Upload de Fatura
@@ -832,6 +955,14 @@ export default function NovaDespesa() {
           </Link>
         </div>
       </form>
+
+      {/* QR Scanner Modal */}
+      {showQRScanner && (
+        <QRScanner
+          onScan={handleQRScan}
+          onClose={() => setShowQRScanner(false)}
+        />
+      )}
       </div>
     </div>
   )
