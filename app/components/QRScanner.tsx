@@ -65,19 +65,15 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
         stream.getTracks().forEach(track => track.stop())
       }
 
-      // Build constraints
+      // Build constraints - iOS Safari is very picky
       const constraints: any = {
         video: {
-          width: { ideal: 1920, min: 1280 },
-          height: { ideal: 1080, min: 720 },
-        }
-      }
-
-      // Use specific camera if selected, otherwise use back camera
-      if (selectedCamera) {
-        constraints.video.deviceId = { exact: selectedCamera }
-      } else {
-        constraints.video.facingMode = { ideal: 'environment' }
+          facingMode: selectedCamera ? undefined : { ideal: 'environment' },
+          deviceId: selectedCamera ? { exact: selectedCamera } : undefined,
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false
       }
 
       // Request camera
@@ -87,17 +83,48 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
 
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream
-        videoRef.current.setAttribute('playsinline', 'true') // Required for iOS
-        videoRef.current.play()
 
-        // Start scanning once video is ready
+        // iOS Safari requires these attributes
+        videoRef.current.setAttribute('playsinline', 'true')
+        videoRef.current.setAttribute('webkit-playsinline', 'true')
+        videoRef.current.muted = true
+        videoRef.current.autoplay = true
+
+        // Force play for iOS
+        const playPromise = videoRef.current.play()
+
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log('Video playing successfully')
+              // Start scanning once video is ready
+              scanQRCode()
+            })
+            .catch((err) => {
+              console.error('Error playing video:', err)
+              setError('Erro ao reproduzir vídeo da câmara')
+            })
+        }
+
+        // Fallback for onloadedmetadata
         videoRef.current.onloadedmetadata = () => {
+          console.log('Video metadata loaded')
           scanQRCode()
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error accessing camera:', err)
-      setError('Não foi possível aceder à câmara. Verifique as permissões.')
+      let errorMessage = 'Não foi possível aceder à câmara.'
+
+      if (err.name === 'NotAllowedError') {
+        errorMessage = 'Permissão negada. Por favor, permita o acesso à câmara nas definições.'
+      } else if (err.name === 'NotFoundError') {
+        errorMessage = 'Nenhuma câmara encontrada no dispositivo.'
+      } else if (err.name === 'NotReadableError') {
+        errorMessage = 'Câmara em uso por outra aplicação.'
+      }
+
+      setError(errorMessage)
     }
   }
 
@@ -276,6 +303,8 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
               ref={videoRef}
               className="w-full h-auto rounded-2xl shadow-2xl"
               playsInline
+              webkit-playsinline="true"
+              autoPlay
               muted
             />
 
