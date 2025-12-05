@@ -29,7 +29,7 @@ interface QRData {
   numero_certificado: string | null
 }
 
-async function processQRText(qrText: string) {
+async function processQRText(qrText: string, req: NextRequest) {
   try {
     // Use Python script to process QR text directly
     const pythonScript = path.join(process.cwd(), 'scripts', 'leitor_qr_faturas_at.py')
@@ -69,16 +69,76 @@ async function processQRText(qrText: string) {
 
     // Read the processed QR data
     const qrDataJson = readFileSync(jsonPath, 'utf-8')
-    const qrData = JSON.parse(qrDataJson)
+    const qrData: QRData = JSON.parse(qrDataJson)
 
     // Cleanup
     if (existsSync(tempInput)) unlinkSync(tempInput)
     if (existsSync(jsonPath)) unlinkSync(jsonPath)
 
-    return NextResponse.json({
-      success: true,
-      qr_data: qrData
-    })
+    // Transform QR data to match expense form fields (same as file upload method)
+    const baseTributavel = qrData.linhas_iva.reduce((sum, linha) => sum + (linha.base_tributavel || 0), 0)
+    const valorIva = qrData.linhas_iva.reduce((sum, linha) => sum + (linha.valor_iva || 0), 0)
+    const valorTotal = baseTributavel + valorIva
+
+    // Tentar obter o nome da empresa e categoria através do NIF
+    let companyName = 'Fatura'
+    let categoryId = null
+    if (qrData.nif_emitente) {
+      console.log(`A procurar NIF emitente: ${qrData.nif_emitente}`)
+      try {
+        const apiUrl = 'http://localhost:8520/api/nif-lookup'
+        console.log(`Calling NIF lookup API: ${apiUrl}`)
+
+        const nifLookupRes = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': req.headers.get('Authorization') || ''
+          },
+          body: JSON.stringify({ nif: qrData.nif_emitente })
+        })
+
+        console.log(`NIF lookup response status: ${nifLookupRes.status}`)
+
+        if (nifLookupRes.ok) {
+          const nifData = await nifLookupRes.json()
+          console.log('NIF lookup response data:', nifData)
+          if (nifData.company_name) {
+            companyName = nifData.company_name
+            console.log(`✓ Nome da empresa obtido: ${companyName}`)
+          }
+          if (nifData.category_id) {
+            categoryId = nifData.category_id
+            console.log(`✓ Categoria obtida da cache: ${categoryId}`)
+          }
+        } else {
+          console.error(`✗ NIF lookup falhou com status ${nifLookupRes.status}`)
+        }
+      } catch (err) {
+        console.error('✗ Erro ao fazer NIF lookup:', err)
+      }
+    }
+
+    const expenseData = {
+      description: companyName,
+      amount: valorTotal.toString(),
+      date: qrData.data_emissao || new Date().toISOString().split('T')[0],
+      vat_value: valorIva > 0 ? valorIva.toString() : '',
+      category_id: categoryId,
+      numero_documento: qrData.numero_documento,
+      nif_emitente: qrData.nif_emitente,
+      nif_adquirente: qrData.nif_adquirente,
+      atcud: qrData.atcud,
+      base_tributavel: baseTributavel,
+      valor_iva: valorIva,
+      valor_total: valorTotal,
+      raw_qr_data: qrData
+    }
+
+    console.log('QR Data Extraction Result from camera:')
+    console.log('Final expense data:', expenseData)
+
+    return NextResponse.json({ qr_data: expenseData }, { status: 200 })
   } catch (error: any) {
     console.error('Error processing QR text:', error)
     return NextResponse.json(
@@ -100,7 +160,7 @@ const handler = async (req: NextRequest, context: any) => {
       const body = await req.json()
       if (body.qr_text) {
         // Process QR text directly
-        return await processQRText(body.qr_text)
+        return await processQRText(body.qr_text, req)
       }
       // If JSON but no qr_text, return error
       return NextResponse.json(
