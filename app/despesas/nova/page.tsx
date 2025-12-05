@@ -603,11 +603,11 @@ export default function NovaDespesa() {
               <label className="block text-gray-700 font-bold mb-2 text-sm">
                 Categoria
               </label>
-              <div className="flex gap-3 mb-2">
+              <div className="flex gap-2 mb-2">
                 <select
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
-                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
+                  className="flex-1 min-w-0 px-3 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white text-sm"
                 >
                   <option value="">📂 Selecione uma categoria</option>
                   {categories.map((cat) => (
@@ -619,7 +619,7 @@ export default function NovaDespesa() {
                 <button
                   type="button"
                   onClick={() => setShowNewCategory(!showNewCategory)}
-                  className="px-5 py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl font-bold shadow-md hover:shadow-lg transition-all"
+                  className="px-3 sm:px-5 py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl font-bold shadow-md hover:shadow-lg transition-all whitespace-nowrap text-sm"
                 >
                   + Nova
                 </button>

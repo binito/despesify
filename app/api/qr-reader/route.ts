@@ -102,6 +102,11 @@ const handler = async (req: NextRequest, context: any) => {
         // Process QR text directly
         return await processQRText(body.qr_text)
       }
+      // If JSON but no qr_text, return error
+      return NextResponse.json(
+        { message: 'qr_text não fornecido no body JSON' },
+        { status: 400 }
+      )
     }
 
     // Otherwise, process as file upload
@@ -110,7 +115,7 @@ const handler = async (req: NextRequest, context: any) => {
 
     if (!file) {
       return NextResponse.json(
-        { message: 'Ficheiro ou qr_text não fornecido' },
+        { message: 'Ficheiro não fornecido' },
         { status: 400 }
       )
     }
