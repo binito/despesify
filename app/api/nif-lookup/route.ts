@@ -43,19 +43,11 @@ const handler = async (req: NextRequest, context: any) => {
       })
     }
 
-    // Se não encontrar na cache, fazer scraping
-    console.log(`NIF ${nif} não encontrado na cache. A fazer scraping...`)
-
-    // Tentar primeiro contribuinte.pt (mais fiável)
-    let companyName = await scrapNifFromContribuintePt(nif)
-    let source = 'contribuinte.pt'
-
-    // Se falhar, tentar nif.pt como fallback
-    if (!companyName) {
-      console.log(`Falha em contribuinte.pt, a tentar nif.pt...`)
-      companyName = await scrapNifFromNifPt(nif)
-      source = 'nif.pt'
-    }
+    // If not in cache, use the nif.pt API
+    console.log(`NIF ${nif} not found in cache. Using nif.pt API...`);
+    
+    const companyName = await lookupNifWithApi(nif);
+    const source = 'nif.pt API';
 
     if (companyName) {
       // Guardar na cache (sem categoria na primeira vez)
@@ -90,136 +82,55 @@ const handler = async (req: NextRequest, context: any) => {
   }
 }
 
-async function scrapNifFromContribuintePt(nif: string): Promise<string | null> {
-  try {
-    const response = await fetch(`https://contribuinte.pt/nif/${nif}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    })
+async function lookupNifWithApi(nif: string): Promise<string | null> {
+  const apiKey = process.env.NIF_PT_API_KEY;
 
-    if (!response.ok) {
-      console.log(`Erro ao aceder contribuinte.pt: ${response.status}`)
-      return null
-    }
-
-    const html = await response.text()
-
-    // Procurar pelo nome da empresa no HTML
-    // O site tem geralmente o formato: <title>NIF XXXXXXXXX - Nome da Empresa</title>
-    const titleMatch = html.match(/<title>NIF\s*\d{9}\s*-\s*([^<]+)<\/title>/i)
-    if (titleMatch && titleMatch[1]) {
-      const name = cleanCompanyName(titleMatch[1])
-      if (name.length > 3 && /[A-Za-z]/.test(name)) {
-        console.log(`Nome extraído para NIF ${nif} de contribuinte.pt:`, name)
-        return name
-      }
-    }
-
-    // Fallback: procurar em meta description
-    const metaMatch = html.match(/<meta\s+name="description"\s+content="[^"]*(?:NIF|nif)\s+(?:de\s+|do\s+)?([^"\.]+)/i)
-    if (metaMatch && metaMatch[1]) {
-      const name = cleanCompanyName(metaMatch[1])
-      if (name.length > 3 && /[A-Za-z]/.test(name)) {
-        console.log(`Nome extraído para NIF ${nif} de contribuinte.pt (meta):`, name)
-        return name
-      }
-    }
-
-    console.log(`Não foi possível extrair nome de contribuinte.pt para NIF ${nif}`)
-    return null
-  } catch (error: any) {
-    console.error(`Erro ao fazer scraping de contribuinte.pt para NIF ${nif}:`, error.message)
-    return null
+  if (!apiKey) {
+    console.warn("NIF.pt API key not found in environment variables (NIF_PT_API_KEY).");
+    // We are failing fast to encourage the use of the API key for reliability.
+    throw new Error("API key for NIF.pt is not configured.");
   }
-}
 
-async function scrapNifFromNifPt(nif: string): Promise<string | null> {
+  const url = `https://www.nif.pt/?json=1&q=${nif}&key=${apiKey}`;
+  
   try {
-    // Usar a API de scraping do nif.pt através de fetch
-    const response = await fetch(`https://www.nif.pt/?q=${nif}`, {
+    console.log(`Querying nif.pt API for NIF ${nif}`);
+    const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'User-Agent': 'Despesify/1.0'
       }
-    })
+    });
 
     if (!response.ok) {
-      console.log(`Erro ao aceder nif.pt: ${response.status}`)
-      return null
+      console.error(`nif.pt API request failed with status: ${response.status}`);
+      return null;
     }
 
-    const html = await response.text()
+    const data = await response.json();
 
-    // Remover scripts e tags HTML para limpeza
-    const cleanHtml = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-                          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-
-    // Estratégia 1: Procurar o padrão com o NIF específico
-    // Procura "NIF: 506334562" e extrai tudo para trás até encontrar uma tag de abertura
-    // Exemplo: <p>Município de Pombal<br>NIF: 506334562
-    const nifSpecificPattern = new RegExp(`<p>([^<]*)<br>\\s*NIF:\\s*${nif}`, 'i')
-    const specificMatch = cleanHtml.match(nifSpecificPattern)
-    if (specificMatch && specificMatch[1]) {
-      let name = specificMatch[1].trim()
-      if (name.length > 3 && !name.includes('<') && /[A-Za-z]/.test(name)) {
-        console.log(`Nome extraído para NIF ${nif} (específico):`, name)
-        return name
+    // Check for API-level errors
+    if (data.result === 'error') {
+      console.error(`nif.pt API returned an error: ${data.message}`);
+      // If the error is about an invalid key, we should probably throw
+      if (data.message && data.message.includes('key')) {
+          throw new Error(data.message);
       }
+      return null;
+    }
+    
+    // The company name is in the 'title' field of the record
+    if (data.records && data.records[nif] && data.records[nif].title) {
+      const companyName = cleanCompanyName(data.records[nif].title);
+      console.log(`✓ Company name found via nif.pt API: ${companyName}`);
+      return companyName;
     }
 
-    // Estratégia 1b: Procurar padrão alternativo onde pode haver espaços
-    const pTagMatch = cleanHtml.match(/<p>([^<]*)<br>\s*NIF:\s*\d{9}/i)
-    if (pTagMatch && pTagMatch[1]) {
-      let name = pTagMatch[1].trim()
-      if (name.length > 3 && !name.includes('<') && /[A-Za-z]/.test(name)) {
-        console.log(`Nome extraído para NIF ${nif} (via p tag):`, name)
-        return name
-      }
-    }
-
-    // Estratégia 2: Procurar padrão exato de nome da empresa + NIF
-    // Procurar: NomeEmpresa<br>NIF: XXXXXXXXX
-    const companyNifMatch = cleanHtml.match(/([A-Z][^<\n]*(?:Lda|SA|Unipessoal|Limitada|Sociedade|Portugal|Comunicações)[^<\n]*)<br>\s*NIF:\s*\d{9}/i)
-    if (companyNifMatch && companyNifMatch[1]) {
-      let name = companyNifMatch[1].trim()
-      if (name.length > 3 && !name.includes('<') && /[A-Za-z]/.test(name)) {
-        console.log(`Nome extraído para NIF ${nif} (via br):`, name)
-        return name
-      }
-    }
-
-    // Estratégia 3: Procurar em divs ou spans que contenham o nome
-    const divMatch = cleanHtml.match(/<(?:div|span|h[1-6])[^>]*>\s*([A-Z][^<]{3,}?(?:Lda|SA|Unipessoal|Limitada|Sociedade|Portugal)[^<]*)\s*<\/(?:div|span|h[1-6])>/i)
-    if (divMatch && divMatch[1]) {
-      const name = divMatch[1].trim()
-      if (name.length > 3 && /[A-Za-z]/.test(name)) {
-        console.log(`Nome extraído para NIF ${nif} (via div):`, name)
-        return name
-      }
-    }
-
-    // Estratégia 4: Procurar qualquer sequência com características de nome de empresa
-    // Procurar linhas que contenham ao mesmo tempo: maiúscula inicial + características de empresa
-    const lines = cleanHtml.split(/[\n<]/)
-    for (const line of lines) {
-      const cleaned = line.replace(/<[^>]*>/g, '').trim()
-      if (cleaned.length > 5 &&
-          cleaned.length < 150 &&
-          /^[A-Z]/.test(cleaned) &&
-          /(Lda|SA|Unipessoal|Limitada|Sociedade|Portugal|Comunicações|Transportes|Energia|Banco|Seguros)/i.test(cleaned) &&
-          !cleaned.includes('&') &&
-          !cleaned.includes('[') &&
-          !cleaned.includes('NIF:')) {
-        console.log(`Nome extraído para NIF ${nif} (via linha):`, cleaned)
-        return cleaned
-      }
-    }
-
-    console.log(`Não foi possível extrair nome do HTML para NIF ${nif}`)
-    return null
+    console.log(`NIF ${nif} not found in nif.pt API response.`);
+    return null;
   } catch (error: any) {
-    console.error(`Erro ao fazer scraping de NIF ${nif}:`, error.message)
-    return null
+    console.error(`Failed to fetch from nif.pt API: ${error.message}`);
+    // Re-throwing the error to be caught by the handler, which can then return a 500
+    throw error;
   }
 }
 

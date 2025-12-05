@@ -15,6 +15,8 @@ import json
 from datetime import datetime
 from typing import Dict, Optional, List
 import sys
+import os
+import numpy as np
 
 
 class LeitorQRFaturaAT:
@@ -28,85 +30,167 @@ class LeitorQRFaturaAT:
             'ISE': 0,   # Isento
             'OUT': 0    # Outros
         }
-    
-    def ler_qr_de_imagem(self, caminho_imagem: str) -> Optional[str]:
+
+    def _preprocess_image(self, img: np.ndarray) -> List[np.ndarray]:
+        """
+        Aplica várias técnicas de pré-processamento na imagem para melhorar a deteção de QR Codes.
+        Retorna uma lista de imagens pré-processadas (grayscale, thresholded, CLAHE).
+        """
+        processed_images = []
+
+        if img is None:
+            return processed_images
+
+        # 1. Grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        processed_images.append(gray)
+
+        # 2. Aumentar resolução se muito pequena
+        height, width = gray.shape
+        if max(height, width) < 1000:
+            scale = 1000 / max(height, width)
+            gray_upscaled = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+            processed_images.append(gray_upscaled)
+
+        # 3. Otsu's thresholding (binarização automática)
+        _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        processed_images.append(otsu)
+
+        # 4. Adaptive Thresholding - Gaussian
+        thresh_gauss = cv2.adaptiveThreshold(gray, 255,
+                                      cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                      cv2.THRESH_BINARY, 11, 2)
+        processed_images.append(thresh_gauss)
+
+        # 5. Adaptive Thresholding - Mean (alternativa)
+        thresh_mean = cv2.adaptiveThreshold(gray, 255,
+                                      cv2.ADAPTIVE_THRESH_MEAN_C,
+                                      cv2.THRESH_BINARY, 11, 2)
+        processed_images.append(thresh_mean)
+
+        # 6. CLAHE (Contrast Limited Adaptive Histogram Equalization)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced_gray = clahe.apply(gray)
+        processed_images.append(enhanced_gray)
+
+        # 7. Histogram Equalization (equalização simples)
+        equalized = cv2.equalizeHist(gray)
+        processed_images.append(equalized)
+
+        # 8. Sharpening para melhorar nitidez
+        kernel_sharpening = np.array([[-1,-1,-1],
+                                       [-1, 9,-1],
+                                       [-1,-1,-1]])
+        sharpened = cv2.filter2D(gray, -1, kernel_sharpening)
+        processed_images.append(sharpened)
+
+        # 9. Denoise + sharpen
+        denoised = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
+        processed_images.append(denoised)
+
+        # 10. Morphological operations para limpar ruído
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
+        morph = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel)
+        processed_images.append(morph)
+
+        return processed_images
+
+    def ler_qr_de_imagem(self, caminho_imagem: str, debug_mode: bool = False) -> Optional[str]:
         """
         Lê o código QR de uma imagem de fatura
 
         Args:
             caminho_imagem: Caminho para o ficheiro de imagem
+            debug_mode: Se True, salva imagens pré-processadas para debug
 
         Returns:
             String com os dados do QR ou None se não encontrar
         """
         try:
-            print(f"Lendo imagem: {caminho_imagem}")
+            print(f"Lendo imagem: {caminho_imagem}", file=sys.stderr)
             # Ler a imagem
             imagem = cv2.imread(caminho_imagem)
 
             if imagem is None:
-                print(f"Erro: Não foi possível ler a imagem {caminho_imagem}")
+                print(f"Erro: Não foi possível ler a imagem {caminho_imagem}", file=sys.stderr)
                 return None
 
-            print(f"Imagem carregada com sucesso. Dimensões: {imagem.shape}")
+            print(f"Imagem carregada com sucesso. Dimensões: {imagem.shape}", file=sys.stderr)
+            height, width = imagem.shape[:2]
+            print(f"Resolução: {width}x{height} pixels", file=sys.stderr)
 
             # Usar OpenCV QRCodeDetector (mais robusto)
             qr_detector = cv2.QRCodeDetector()
 
-            # Tentar detectar com imagem original
-            print("Tentando detectar QR na imagem original...")
-            decoded_text, points, straight_qr = qr_detector.detectAndDecode(imagem)
+            # Gerar imagens pré-processadas
+            processed_images = self._preprocess_image(imagem)
+            # Adicionar a imagem original em escala de cinza para tentar também
+            gray_original = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
+            processed_images.insert(0, gray_original) # Prioritize grayscale
 
-            if decoded_text and len(decoded_text) > 0:
-                print(f"✓ QR encontrado!")
-                print(f"Dados do QR (primeiros 100 chars): {decoded_text[:100]}...")
-                return decoded_text
+            # Tentar detectar QR com OpenCV em cada imagem pré-processada
+            print("Tentando detectar QR com OpenCV em imagens pré-processadas...", file=sys.stderr)
+            for i, p_img in enumerate(processed_images):
+                print(f"  Tentando imagem processada {i}...", file=sys.stderr)
 
-            # Se não encontrar, tentar com rotações
-            print("QR não encontrado. Tentando com rotações...")
+                # Save debug image if in debug mode
+                if debug_mode:
+                    debug_path = caminho_imagem.replace('.png', f'_debug_{i}.png')
+                    cv2.imwrite(debug_path, p_img)
+                    print(f"  Debug: Salva em {debug_path}", file=sys.stderr)
+
+                decoded_text, points, straight_qr = qr_detector.detectAndDecode(p_img)
+                if decoded_text and len(decoded_text) > 0:
+                    print(f"✓ QR encontrado em imagem processada {i}!", file=sys.stderr)
+                    print(f"Dados do QR (primeiros 100 chars): {decoded_text[:100]}...", file=sys.stderr)
+                    return decoded_text
+
+            # Se não encontrar, tentar com rotações na imagem original (ainda é válido)
+            print("QR não encontrado em pré-processadas. Tentando com rotações na imagem original...", file=sys.stderr)
             for angulo in [90, 180, 270]:
-                print(f"  Tentando rotação de {angulo}°...")
+                print(f"  Tentando rotação de {angulo}°...", file=sys.stderr)
                 rotacionada = cv2.rotate(imagem, cv2.ROTATE_90_CLOCKWISE if angulo == 90 else
                                        cv2.ROTATE_180 if angulo == 180 else
                                        cv2.ROTATE_90_COUNTERCLOCKWISE)
                 decoded_text, points, straight_qr = qr_detector.detectAndDecode(rotacionada)
                 if decoded_text and len(decoded_text) > 0:
-                    print(f"  ✓ QR encontrado com rotação de {angulo}°")
-                    print(f"Dados do QR (primeiros 100 chars): {decoded_text[:100]}...")
+                    print(f"  ✓ QR encontrado com rotação de {angulo}°", file=sys.stderr)
+                    print(f"Dados do QR (primeiros 100 chars): {decoded_text[:100]}...", file=sys.stderr)
                     return decoded_text
 
-            # Se OpenCV não funcionar, tentar pyzbar como fallback
+            # Se OpenCV ainda não funcionar, tentar pyzbar como fallback em todas as versões da imagem
             if PYZBAR_AVAILABLE:
-                print("OpenCV não encontrou. Tentando com pyzbar...")
+                print("OpenCV não encontrou em nenhuma tentativa. Tentando com pyzbar em todas as versões...", file=sys.stderr)
+
+                # Tentar pyzbar na imagem original colorida
                 codigos_qr = pyzbar.decode(imagem)
-
                 if codigos_qr:
-                    print(f"✓ {len(codigos_qr)} código(s) QR encontrado(s) com pyzbar")
+                    print(f"✓ {len(codigos_qr)} código(s) QR encontrado(s) com pyzbar (original colorida)", file=sys.stderr)
                     dados_qr = codigos_qr[0].data.decode('utf-8')
-                    print(f"Dados do QR (primeiros 100 chars): {dados_qr[:100]}...")
+                    print(f"Dados do QR (primeiros 100 chars): {dados_qr[:100]}...", file=sys.stderr)
                     return dados_qr
 
-                # Tentar com processamento
-                print("Tentando com processamento...")
-                cinzenta = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
-                codigos_qr = pyzbar.decode(cinzenta)
-                if codigos_qr:
-                    print(f"✓ {len(codigos_qr)} código(s) QR encontrado(s)")
-                    dados_qr = codigos_qr[0].data.decode('utf-8')
-                    print(f"Dados do QR (primeiros 100 chars): {dados_qr[:100]}...")
-                    return dados_qr
+                # Tentar pyzbar em cada imagem pré-processada (incluindo grayscale original)
+                for i, p_img in enumerate(processed_images):
+                    print(f"  Tentando pyzbar em imagem processada {i}...", file=sys.stderr)
+                    codigos_qr = pyzbar.decode(p_img)
+                    if codigos_qr:
+                        print(f"✓ {len(codigos_qr)} código(s) QR encontrado(s) com pyzbar (processada {i})", file=sys.stderr)
+                        dados_qr = codigos_qr[0].data.decode('utf-8')
+                        print(f"Dados do QR (primeiros 100 chars): {dados_qr[:100]}...", file=sys.stderr)
+                        return dados_qr
 
-            print("⚠ Nenhum código QR encontrado na imagem")
-            print("Dica: Certifique-se de que:")
-            print("  - O QR code está visível e legível")
-            print("  - A imagem tem boa qualidade")
-            print("  - O QR não está cortado ou muito distorcido")
+            print("⚠ Nenhum código QR encontrado na imagem", file=sys.stderr)
+            print("Dica: Certifique-se de que:", file=sys.stderr)
+            print("  - O QR code está visível e legível", file=sys.stderr)
+            print("  - A imagem tem boa qualidade", file=sys.stderr)
+            print("  - O QR não está cortado ou muito distorcido", file=sys.stderr)
             return None
 
         except Exception as e:
-            print(f"Erro ao ler QR code: {e}")
+            print(f"Erro ao ler QR code: {e}", file=sys.stderr)
             import traceback
-            traceback.print_exc()
+            traceback.print_exc(file=sys.stderr)
             return None
     
     def descodificar_qr_fatura(self, dados_qr: str) -> Dict:
@@ -114,7 +198,7 @@ class LeitorQRFaturaAT:
         Descodifica os dados do QR code de uma fatura portuguesa
         
         Formato esperado (separado por asteriscos):
-        A:NIF_Emitente*B:NIF_Adquirente*C:País*D:TipoDoc*E:Estado*F:DataEmissão*G:NumDoc*H:ATCUD*I1:PT*I2:ValorBase*I3:ValorIVA*I4:TaxaIVA*...*N:ValorTotal*O:Retencao*P:Hash*Q:CertificadoNum*R:OutrasInfos
+        A:NIF_Emitente*B:NIF_Adquirente*C:País*D:TipoDoc*E:Estado*F:DataEmissao*G:NumDoc*H:ATCUD*I1:PT*I2:ValorBase*I3:ValorIVA*I4:TaxaIVA*...*N:ValorTotal*O:Retencao*P:Hash*Q:CertificadoNum*R:OutrasInfos
         
         Args:
             dados_qr: String com os dados extraídos do QR
@@ -174,69 +258,85 @@ class LeitorQRFaturaAT:
                 elif chave == 'H':
                     fatura['atcud'] = valor
                 elif chave.startswith('I'):
-                    # Linhas de IVA (I1, I2, I3, I4...)
-                    # Formato pode variar: I1, I2, I3, I4 ou I7, I8, etc
-                    # I1 = país, I2 = base tributável, I3 = total IVA, I4 = taxa IVA
-                    # Mas também pode ser: I7 = base, I8 = iva
+                    # Linhas de IVA: múltiplas linhas possíveis
+                    # Formato: I1=país, I2=base1, I3=base2, I4=iva1, I5=iva2, I6=taxa1, I7=base3, I8=iva3...
+                    # OU: I1=país, I3=base1, I4=iva1, I7=base2, I8=iva2
 
-                    # Extrair o número depois de 'I'
                     numero_str = chave[1:]
-
                     try:
                         numero = int(numero_str)
 
-                        # Mapear campos conhecidos
-                        if numero == 1 or numero == 7:  # País ou Base Tributável
-                            # Se for valor numérico, é base. Se for PT/ES/etc, é país
+                        # I1 geralmente é país
+                        if numero == 1:
                             try:
                                 float(valor)
-                                # É base tributável
+                                # Se for número, tratar como base da linha 1
                                 if '1' not in linhas_iva_temp:
                                     linhas_iva_temp['1'] = {}
                                 linhas_iva_temp['1']['base_tributavel'] = float(valor)
                             except:
-                                # É país
-                                if '1' not in linhas_iva_temp:
-                                    linhas_iva_temp['1'] = {}
-                                linhas_iva_temp['1']['pais'] = valor
-
-                        elif numero == 2 or numero == 8:  # Base ou IVA
-                            # Se houver I7 (base), I8 será IVA
-                            try:
-                                float(valor)
-                                if numero == 2:
-                                    if '1' not in linhas_iva_temp:
-                                        linhas_iva_temp['1'] = {}
-                                    linhas_iva_temp['1']['base_tributavel'] = float(valor)
-                                elif numero == 8:
-                                    if '1' not in linhas_iva_temp:
-                                        linhas_iva_temp['1'] = {}
-                                    linhas_iva_temp['1']['valor_iva'] = float(valor)
-                            except:
+                                # É país - aplicar a todas as linhas
                                 pass
 
-                        elif numero == 3:  # Total IVA
-                            try:
-                                if '1' not in linhas_iva_temp:
-                                    linhas_iva_temp['1'] = {}
-                                linhas_iva_temp['1']['valor_iva'] = float(valor)
-                            except:
-                                pass
+                        # Pares de base/iva podem estar em diferentes formatos:
+                        # Formato 1: I3/I4 = linha 1, I7/I8 = linha 2, I11/I12 = linha 3... (padrão antigo)
+                        # Formato 2: I5/I6 = linha 1, I7/I8 = linha 2, I9/I10 = linha 3... (padrão novo)
+                        # Verificar qual padrão é usado e mapear corretamente
+                        elif numero >= 3:
+                            # Tentar determinar o padrão baseado nos números ímpares/pares
+                            # Se temos I5/I6, I7/I8, I9/I10... (pares consecutivos de ímpar/par)
+                            # Se temos I3/I4, I7/I8, I11/I12... (pares com saltos de 4)
 
-                        elif numero == 4:  # Taxa IVA
-                            if '1' not in linhas_iva_temp:
-                                linhas_iva_temp['1'] = {}
-                            linhas_iva_temp['1']['taxa_iva_codigo'] = valor
-                            linhas_iva_temp['1']['taxa_iva_percentagem'] = self.taxas_iva_pt.get(valor, 0)
+                            # Verificar se é par consecutivo (I5/I6, I7/I8, I9/I10...)
+                            # Neste caso, ímpar é base, par seguinte é IVA
+                            if numero % 2 == 1:  # Número ímpar (I5, I7, I9, I11...)
+                                # Base tributável
+                                # I5 = linha 1, I7 = linha 2, I9 = linha 3...
+                                # OU I3 = linha 1, I7 = linha 2, I11 = linha 3...
 
+                                # Tentar mapear baseado em ímpares >= 5
+                                if numero >= 5:
+                                    linha_num = str((numero - 5) // 2 + 1)
+                                else:  # I3
+                                    linha_num = str((numero - 3) // 4 + 1)
+
+                                if linha_num not in linhas_iva_temp:
+                                    linhas_iva_temp[linha_num] = {}
+
+                                try:
+                                    linhas_iva_temp[linha_num]['base_tributavel'] = float(valor)
+                                except:
+                                    pass
+
+                            elif numero % 2 == 0:  # Número par (I4, I6, I8, I10...)
+                                # Valor IVA
+                                # I6 = linha 1, I8 = linha 2, I10 = linha 3...
+                                # OU I4 = linha 1, I8 = linha 2, I12 = linha 3...
+
+                                # Tentar mapear baseado em pares >= 6
+                                if numero >= 6:
+                                    linha_num = str((numero - 6) // 2 + 1)
+                                else:  # I4
+                                    linha_num = str((numero - 4) // 4 + 1)
+
+                                if linha_num not in linhas_iva_temp:
+                                    linhas_iva_temp[linha_num] = {}
+
+                                try:
+                                    linhas_iva_temp[linha_num]['valor_iva'] = float(valor)
+                                except:
+                                    pass
                     except:
-                        # Não conseguiu fazer parse, ignorar
                         pass
                         
                 elif chave == 'N':
-                    fatura['valor_total'] = float(valor)
+                    # N pode ser valor total OU retenção, dependendo da posição no QR
+                    # Vamos guardar temporariamente e decidir depois
+                    fatura['campo_n'] = float(valor)
                 elif chave == 'O':
-                    fatura['retencao_iva'] = float(valor) if valor else 0
+                    # O pode ser retenção OU valor total, dependendo da posição no QR
+                    # Vamos guardar temporariamente e decidir depois
+                    fatura['campo_o'] = float(valor) if valor else 0
                 elif chave == 'P':
                     fatura['hash'] = valor
                 elif chave == 'Q':
@@ -244,9 +344,26 @@ class LeitorQRFaturaAT:
                 elif chave == 'R':
                     fatura['outras_infos'] = valor
             
-            # Converter linhas de IVA para lista
+            # Converter linhas de IVA para lista e calcular taxa se necessário
             for num_linha in sorted(linhas_iva_temp.keys()):
-                fatura['linhas_iva'].append(linhas_iva_temp[num_linha])
+                linha = linhas_iva_temp[num_linha]
+                # If percentage is not explicitly set, but base and iva value are, try to calculate
+                if ('base_tributavel' in linha and 'valor_iva' in linha and
+                        ('taxa_iva_percentagem' not in linha or linha['taxa_iva_percentagem'] is None or linha['taxa_iva_percentagem'] == 0)):
+                    base = float(linha['base_tributavel'])
+                    iva_valor = float(linha['valor_iva'])
+                    if base > 0:
+                        calculated_taxa = round((iva_valor / base) * 100, 2) # Round to 2 decimal places
+                        linha['taxa_iva_percentagem'] = calculated_taxa
+                        # Assign a generic code if not present, e.g., 'CALC'
+                        if 'taxa_iva_codigo' not in linha or linha['taxa_iva_codigo'] == 'OUT':
+                            linha['taxa_iva_codigo'] = f"CALC({calculated_taxa}%)"
+                    else:
+                        # If base is 0, and iva_valor is 0, it's 0% IVA (exempt)
+                        if iva_valor == 0:
+                            linha['taxa_iva_percentagem'] = 0
+                            linha['taxa_iva_codigo'] = 'ISE'
+                fatura['linhas_iva'].append(linha)
 
             # Calcular valor total correto como base_tributavel + valor_iva
             total_base = 0
@@ -255,13 +372,57 @@ class LeitorQRFaturaAT:
                 total_base += linha.get('base_tributavel', 0)
                 total_iva += linha.get('valor_iva', 0)
 
-            # Sobrescrever valor_total com o cálculo correto
-            fatura['valor_total'] = total_base + total_iva
+            # Calcular o valor total esperado (base + IVA)
+            valor_total_calculado = round(total_base + total_iva, 2)
+
+            campo_n = fatura.get('campo_n', 0)
+            campo_o = fatura.get('campo_o', 0)
+
+            # Estratégia melhorada para determinar valor_total e IVA total:
+            # 1. Se temos linhas de IVA válidas, o valor calculado é mais confiável
+            # 2. Campo N geralmente é o IVA total ou valor total do documento
+            # 3. Campo O pode ser o valor total, retenção, ou outros valores
+
+            if len(fatura['linhas_iva']) > 0 and total_base > 0:
+                # Temos linhas de IVA válidas - usar valor calculado como total
+                fatura['valor_total'] = valor_total_calculado
+
+                # Verificar se N ou O corresponde ao total de IVA
+                if abs(campo_n - total_iva) < 0.01:
+                    # N é o IVA total
+                    fatura['total_iva_qr'] = campo_n
+                    fatura['retencao_iva'] = campo_o if campo_o else 0
+                elif abs(campo_o - total_iva) < 0.01:
+                    # O é o IVA total
+                    fatura['total_iva_qr'] = campo_o
+                    fatura['retencao_iva'] = campo_n if campo_n else 0
+                else:
+                    # Nenhum corresponde ao IVA - guardar ambos para referência
+                    fatura['campo_n_original'] = campo_n
+                    fatura['campo_o_original'] = campo_o
+                    fatura['retencao_iva'] = 0
+            else:
+                # Sem linhas de IVA válidas - usar lógica antiga
+                # Comparar qual dos campos está mais próximo do valor calculado
+                if abs(campo_n - valor_total_calculado) < abs(campo_o - valor_total_calculado):
+                    fatura['valor_total'] = campo_n
+                    fatura['retencao_iva'] = campo_o
+                else:
+                    fatura['valor_total'] = campo_o
+                    fatura['retencao_iva'] = campo_n
+
+            # Adicionar campos auxiliares para debug/verificação
+            fatura['total_base_calculado'] = round(total_base, 2)
+            fatura['total_iva_calculado'] = round(total_iva, 2)
+
+            # Remover campos temporários
+            fatura.pop('campo_n', None)
+            fatura.pop('campo_o', None)
 
             return fatura
             
         except Exception as e:
-            print(f"Erro ao descodificar QR: {e}")
+            print(f"Erro ao descodificar QR: {e}", file=sys.stderr)
             return {'erro': str(e), 'raw_data': dados_qr}
     
     def processar_fatura(self, caminho_imagem: str) -> Optional[Dict]:
@@ -274,7 +435,7 @@ class LeitorQRFaturaAT:
         Returns:
             Dicionário com os dados da fatura ou None se falhar
         """
-        print(f"A processar: {caminho_imagem}")
+        print(f"A processar: {caminho_imagem}", file=sys.stderr)
         
         # Ler QR code
         dados_qr = self.ler_qr_de_imagem(caminho_imagem)
@@ -282,7 +443,7 @@ class LeitorQRFaturaAT:
         if not dados_qr:
             return None
         
-        print(f"QR Code encontrado! Tamanho: {len(dados_qr)} caracteres")
+        print(f"QR Code encontrado! Tamanho: {len(dados_qr)} caracteres", file=sys.stderr)
         
         # Descodificar dados
         fatura = self.descodificar_qr_fatura(dados_qr)
@@ -322,7 +483,7 @@ class LeitorQRFaturaAT:
             linhas.append(f"  Linha {i}:")
             linhas.append(f"    Base Tributável: {linha_iva.get('base_tributavel', 'N/A')}€")
             linhas.append(f"    Valor IVA: {linha_iva.get('valor_iva', 'N/A')}€")
-            linhas.append(f"    Taxa: {linha_iva.get('taxa_iva_codigo', 'N/A')} ({linha_iva.get('taxa_iva_percentagem', 'N/A')}%)")
+            linhas.append(f"    Taxa: {linha_iva.get('taxa_iva_codigo', 'N/A')} ({linha_iva.get('taxa_iva_percentagem', 'N/A')}%) ")
         
         linhas.extend([
             "-"*60,
@@ -347,42 +508,60 @@ class LeitorQRFaturaAT:
         try:
             with open(caminho_saida, 'w', encoding='utf-8') as f:
                 json.dump(fatura, f, ensure_ascii=False, indent=2)
-            print(f"Dados exportados para: {caminho_saida}")
+            print(f"Dados exportados para: {caminho_saida}", file=sys.stderr)
         except Exception as e:
-            print(f"Erro ao exportar JSON: {e}")
+            print(f"Erro ao exportar JSON: {e}", file=sys.stderr)
 
 
 def main():
-    """Função principal para uso via linha de comandos"""
-    if len(sys.argv) < 2:
-        print("Uso: python leitor_qr_faturas_at.py <caminho_imagem> [--json <saída.json>]")
-        print("\nExemplo:")
-        print("  python leitor_qr_faturas_at.py fatura.jpg")
-        print("  python leitor_qr_faturas_at.py fatura.jpg --json dados_fatura.json")
-        sys.exit(1)
-    
-    caminho_imagem = sys.argv[1]
-    caminho_json = None
-    
-    # Verificar se foi pedido export JSON
-    if '--json' in sys.argv:
-        idx = sys.argv.index('--json')
-        if idx + 1 < len(sys.argv):
-            caminho_json = sys.argv[idx + 1]
-    
-    # Processar fatura
+    """
+    Função principal que lê a imagem de um ficheiro e escreve o resultado JSON para ficheiro.
+    """
     leitor = LeitorQRFaturaAT()
-    fatura = leitor.processar_fatura(caminho_imagem)
-    
-    if fatura:
-        # Mostrar dados formatados
-        print("\n" + leitor.formatar_fatura(fatura))
-        
-        # Exportar JSON se pedido
-        if caminho_json:
-            leitor.exportar_json(fatura, caminho_json)
-    else:
-        print("Não foi possível processar a fatura.")
+    fatura = None
+    image_path = None
+    output_path = None
+
+    try:
+        # Verificar argumentos da linha de comando
+        if len(sys.argv) < 2:
+            print(json.dumps({"error": "Utilização: python script.py <image_path> [--json <output_path>]"}))
+            sys.exit(1)
+
+        image_path = sys.argv[1]
+
+        # Verificar se a imagem existe
+        if not os.path.exists(image_path):
+            print(json.dumps({"error": f"Ficheiro de imagem não encontrado: {image_path}"}))
+            sys.exit(1)
+
+        # Processar a fatura a partir do ficheiro
+        fatura = leitor.processar_fatura(image_path)
+
+        if fatura:
+            # Se houver um caminho de saída JSON, escrever para ficheiro
+            if len(sys.argv) >= 4 and sys.argv[2] == '--json':
+                output_path = sys.argv[3]
+                try:
+                    with open(output_path, 'w', encoding='utf-8') as f:
+                        json.dump(fatura, f, ensure_ascii=False, indent=2)
+                    print(json.dumps({"success": "QR code processado com sucesso"}), file=sys.stderr)
+                except Exception as e:
+                    print(json.dumps({"error": f"Erro ao escrever ficheiro JSON: {str(e)}"}))
+                    sys.exit(1)
+            else:
+                # Se não houver caminho de saída, escrever para stdout
+                print(json.dumps(fatura, ensure_ascii=False))
+        else:
+            # Retornar um erro JSON se a fatura não for processada
+            print(json.dumps({"error": "QR Code não encontrado ou ilegível na imagem."}))
+            sys.exit(1)
+
+    except Exception as e:
+        # Capturar exceções e retornar um erro JSON
+        print(json.dumps({"error": f"Ocorreu um erro inesperado no script Python: {str(e)}"}))
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         sys.exit(1)
 
 

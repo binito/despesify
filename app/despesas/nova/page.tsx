@@ -227,6 +227,11 @@ export default function NovaDespesa() {
           setValorIva(data.qr_data.valor_iva)
           updates.push('Valor IVA')
         }
+        // Extract and set vatPercentage from QR data
+        if (data.qr_data.linhas_iva && data.qr_data.linhas_iva.length > 0 && data.qr_data.linhas_iva[0].taxa_iva_percentagem !== undefined) {
+          setVatPercentage(String(data.qr_data.linhas_iva[0].taxa_iva_percentagem))
+          updates.push('Taxa IVA')
+        }
         if (data.qr_data.nif_emitente) {
           setNifEmitente(data.qr_data.nif_emitente)
           updates.push('NIF Emitente')
@@ -242,6 +247,10 @@ export default function NovaDespesa() {
         if (data.qr_data.base_tributavel) {
           setBaseTributavel(data.qr_data.base_tributavel)
           updates.push('Base Tributável')
+        }
+        if (data.qr_data.numero_documento) {
+          setNumeroDocumento(data.qr_data.numero_documento)
+          updates.push('Número do Documento')
         }
 
         if (showMessage) {
@@ -325,7 +334,7 @@ export default function NovaDespesa() {
       formData.append('amount', amount)
       formData.append('expense_date', date)
       if (categoryId) formData.append('category_id', categoryId)
-      if (vatPercentage) formData.append('vat_percentage', vatPercentage)
+      if (vatPercentage !== '') formData.append('vat_percentage', vatPercentage)
       formData.append('payment_method', paymentMethod)
       if (notes) formData.append('notes', notes)
       if (files) {
@@ -363,50 +372,56 @@ export default function NovaDespesa() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-6">
-        <Link href="/despesas" className="text-blue-500 hover:text-blue-600">
-          ← Voltar
-        </Link>
-        <h1 className="text-3xl font-bold text-gray-900 mt-2">Nova Despesa</h1>
-      </div>
-
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 py-6 sm:py-10">
+      <div className="container mx-auto px-4 max-w-6xl">
+        <div className="mb-6">
+          <Link href="/despesas" className="text-blue-600 hover:text-blue-700 font-medium mb-2 inline-block">
+            ← Voltar às despesas
+          </Link>
+          <h1 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
+            Nova Despesa
+          </h1>
         </div>
-      )}
 
-      {ocrMessage && (
-        <div className={`border px-4 py-3 rounded mb-4 ${
-          ocrMessage.startsWith('✓') ? 'bg-green-100 border-green-400 text-green-700' :
-          ocrMessage.startsWith('⚠') ? 'bg-yellow-100 border-yellow-400 text-yellow-700' :
-          'bg-red-100 border-red-400 text-red-700'
-        }`}>
-          {ocrMessage}
-        </div>
-      )}
+        {error && (
+          <div className="bg-red-50 border-l-4 border-red-500 text-red-800 px-6 py-4 rounded-lg mb-6 shadow-md">
+            <p className="font-bold">Erro</p>
+            <p>{error}</p>
+          </div>
+        )}
 
-      {ocrData && (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-          ✓ Dados extraídos da fatura. Reveja e ajuste conforme necessário.
-        </div>
-      )}
+        {ocrMessage && (
+          <div className={`border-l-4 px-6 py-4 rounded-lg mb-6 shadow-md ${
+            ocrMessage.startsWith('✓') ? 'bg-green-50 border-green-500 text-green-800' :
+            ocrMessage.startsWith('⚠') ? 'bg-yellow-50 border-yellow-500 text-yellow-800' :
+            'bg-red-50 border-red-500 text-red-800'
+          }`}>
+            <p className="font-bold">{ocrMessage}</p>
+          </div>
+        )}
 
-      {qrData && (
-        <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4">
-          ✓ Dados extraídos do código QR da fatura AT. Reveja e ajuste conforme necessário.
-        </div>
-      )}
+        {ocrData && (
+          <div className="bg-green-50 border-l-4 border-green-500 text-green-800 px-6 py-4 rounded-lg mb-6 shadow-md">
+            <p className="font-bold">✓ Dados extraídos da fatura</p>
+            <p className="text-sm mt-1">Reveja e ajuste conforme necessário</p>
+          </div>
+        )}
 
-      <form onSubmit={handleSubmit} className="max-w-4xl bg-white rounded-lg shadow p-6">
+        {qrData && (
+          <div className="bg-blue-50 border-l-4 border-blue-500 text-blue-800 px-6 py-4 rounded-lg mb-6 shadow-md">
+            <p className="font-bold">✓ Dados extraídos do código QR da fatura AT</p>
+            <p className="text-sm mt-1">Reveja e ajuste conforme necessário</p>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 border border-gray-100">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Coluna 1: Dados Básicos */}
           <div className="lg:col-span-2">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Dados da Despesa</h2>
+            <h2 className="text-2xl font-black text-gray-800 mb-6 pb-3 border-b-2 border-gray-100">Dados da Despesa</h2>
 
-            <div className="mb-4">
-              <label className="block text-gray-700 font-bold mb-2">
+            <div className="mb-5">
+              <label className="block text-gray-700 font-bold mb-2 text-sm">
                 Descrição *
               </label>
               <input
@@ -414,30 +429,33 @@ export default function NovaDespesa() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
                 placeholder="Ex: Supermercado Jumbo"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-2 gap-4 mb-5">
               <div>
-                <label className="block text-gray-700 font-bold mb-2">
+                <label className="block text-gray-700 font-bold mb-2 text-sm">
                   Valor (€) *
                 </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                  placeholder="0.00"
-                />
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">€</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    required
+                    className="w-full pl-8 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all font-semibold"
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-gray-700 font-bold mb-2">
+                <label className="block text-gray-700 font-bold mb-2 text-sm">
                   Data *
                 </label>
                 <input
@@ -445,56 +463,59 @@ export default function NovaDespesa() {
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                   required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-2 gap-4 mb-5">
               <div>
-                <label className="block text-gray-700 font-bold mb-2">
+                <label className="block text-gray-700 font-bold mb-2 text-sm">
                   Método de Pagamento
                 </label>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
                 >
-                  <option value="cash">Dinheiro</option>
-                  <option value="credit_card">Cartão de Crédito</option>
-                  <option value="debit_card">Cartão de Débito</option>
-                  <option value="bank_transfer">Transferência</option>
-                  <option value="other">Outro</option>
+                  <option value="cash">💵 Dinheiro</option>
+                  <option value="credit_card">💳 Cartão de Crédito</option>
+                  <option value="debit_card">💳 Cartão de Débito</option>
+                  <option value="bank_transfer">🏦 Transferência</option>
+                  <option value="other">📌 Outro</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-gray-700 font-bold mb-2">
+                <label className="block text-gray-700 font-bold mb-2 text-sm">
                   Valor IVA (€)
                 </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={valorIva}
-                  onChange={(e) => setValorIva(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                  placeholder="0.00"
-                />
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">€</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={valorIva}
+                    onChange={(e) => setValorIva(e.target.value)}
+                    className="w-full pl-8 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="mb-4">
-              <label className="block text-gray-700 font-bold mb-2">
+            <div className="mb-5">
+              <label className="block text-gray-700 font-bold mb-2 text-sm">
                 Categoria
               </label>
-              <div className="flex gap-2 mb-2">
+              <div className="flex gap-3 mb-2">
                 <select
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
                 >
-                  <option value="">Selecione uma categoria</option>
+                  <option value="">📂 Selecione uma categoria</option>
                   {categories.map((cat) => (
                     <option key={cat.id} value={cat.id}>
                       {cat.name}
@@ -504,68 +525,75 @@ export default function NovaDespesa() {
                 <button
                   type="button"
                   onClick={() => setShowNewCategory(!showNewCategory)}
-                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-bold"
+                  className="px-5 py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl font-bold shadow-md hover:shadow-lg transition-all"
                 >
                   + Nova
                 </button>
               </div>
 
               {showNewCategory && (
-                <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                  <div className="mb-3">
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-xl mb-4 border-2 border-blue-100">
+                  <div className="mb-4">
+                    <label className="block text-gray-700 font-bold mb-2 text-sm">Nome da Categoria</label>
                     <input
                       type="text"
                       value={newCategory}
                       onChange={(e) => setNewCategory(e.target.value)}
-                      placeholder="Nome da categoria"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                      placeholder="Ex: Alimentação, Transporte..."
+                      className="w-full px-4 py-3 border-2 border-white rounded-xl focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
                     />
                   </div>
-                  <div className="flex gap-2 items-center mb-3">
+                  <div className="flex gap-3 items-center mb-4">
                     <input
                       type="color"
                       value={newCategoryColor}
                       onChange={(e) => setNewCategoryColor(e.target.value)}
-                      className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
+                      className="w-14 h-14 border-2 border-white rounded-xl cursor-pointer shadow-md"
                     />
-                    <span className="text-gray-600">Cor da categoria</span>
+                    <div>
+                      <span className="text-gray-700 font-bold block text-sm">Cor da categoria</span>
+                      <span className="text-gray-500 text-xs">Escolha uma cor para identificar</span>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={handleCreateCategory}
-                      className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-bold"
+                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-bold shadow-md hover:shadow-lg transition-all"
                     >
-                      Criar
+                      ✓ Criar
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowNewCategory(false)}
-                      className="px-4 py-2 bg-gray-400 hover:bg-gray-500 text-white rounded-lg font-bold"
+                      className="flex-1 px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 rounded-xl font-bold border-2 border-gray-200 transition-all"
                     >
-                      Cancelar
+                      ✕ Cancelar
                     </button>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="mb-4">
-              <label className="block text-gray-700 font-bold mb-2">
+            <div className="mb-5">
+              <label className="block text-gray-700 font-bold mb-2 text-sm">
                 Notas
               </label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                placeholder="Notas adicionais"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all resize-none"
+                placeholder="Adicione observações ou notas sobre esta despesa..."
                 rows={3}
               />
             </div>
 
             {qrData && (
-              <div className="mb-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <h3 className="text-lg font-bold text-blue-900 mb-4">Dados do QR Code AT</h3>
+              <div className="mb-5 bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-blue-200 shadow-md">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-2xl">📱</span>
+                  <h3 className="text-xl font-black text-blue-900">Dados do QR Code AT</h3>
+                </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
@@ -641,37 +669,43 @@ export default function NovaDespesa() {
 
           {/* Coluna 2: Upload e Preview */}
           <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Fatura</h2>
+            <h2 className="text-2xl font-black text-gray-800 mb-6 pb-3 border-b-2 border-gray-100">Fatura</h2>
 
-            <div className="mb-4">
-              <label className="block text-gray-700 font-bold mb-2">
-                Upload de Ficheiro
+            <div className="mb-5">
+              <label className="block text-gray-700 font-bold mb-2 text-sm">
+                Upload de Fatura
               </label>
-              <input
-                type="file"
-                multiple
-                accept="image/*,.pdf"
-                onChange={handleFileChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-              />
-              <p className="text-sm text-gray-600 mt-2">
-                Imagens (JPG, PNG) ou PDFs. OCR automático!
-              </p>
+              <div className="relative">
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf"
+                  onChange={handleFileChange}
+                  className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-blue-500 file:to-blue-600 file:text-white file:font-bold file:cursor-pointer hover:file:from-blue-600 hover:file:to-blue-700"
+                />
+              </div>
+              <div className="flex items-center gap-2 mt-3 bg-blue-50 px-4 py-3 rounded-lg">
+                <span className="text-blue-600 text-xl">✨</span>
+                <p className="text-sm text-blue-800 font-medium">
+                  Suporta imagens (JPG, PNG) e PDFs com leitura automática de QR Code AT!
+                </p>
+              </div>
             </div>
 
             {/* Previews */}
             {filePreviews.length > 0 && (
-              <div className="mb-4">
-                <label className="block text-gray-700 font-bold mb-2">
-                  Preview dos Ficheiros (clica para abrir em tamanho inteiro)
+              <div className="mb-5">
+                <label className="block text-gray-700 font-bold mb-3 text-sm">
+                  📎 Preview dos Ficheiros
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <p className="text-xs text-gray-600 mb-3">Clique para visualizar em tamanho completo</p>
+                <div className="grid grid-cols-2 gap-3">
                   {filePreviews.map((preview, idx) => (
                     <div key={idx} className="relative group">
                       <button
                         type="button"
                         onClick={() => setSelectedFile(preview)}
-                        className="w-full border border-gray-300 rounded-lg overflow-hidden bg-gray-50 hover:shadow-lg transition-shadow cursor-pointer"
+                        className="w-full border-2 border-gray-200 rounded-xl overflow-hidden bg-white hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer transform hover:scale-105"
                       >
                         {preview.type === 'pdf' ? (
                           <div className="w-full h-40 flex items-center justify-center bg-red-50 border-2 border-red-300">
@@ -691,12 +725,12 @@ export default function NovaDespesa() {
                       </button>
 
                       {/* Botões de OCR e QR sobrepostos */}
-                      <div className="absolute bottom-2 right-2 flex gap-1">
+                      <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           type="button"
                           onClick={() => handleManualQRRead(preview)}
                           disabled={ocrLoading}
-                          className="bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 text-white px-2 py-1 rounded text-xs font-bold shadow-lg transition-all"
+                          className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-400 text-white px-3 py-2 rounded-lg text-xs font-bold shadow-lg transition-all transform hover:scale-110"
                           title="Ler código QR da fatura AT"
                         >
                           {ocrLoading ? '⏳' : '📱 QR'}
@@ -705,7 +739,7 @@ export default function NovaDespesa() {
                           type="button"
                           onClick={() => handleManualOCR(preview)}
                           disabled={ocrLoading}
-                          className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-2 py-1 rounded text-xs font-bold shadow-lg transition-all"
+                          className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-400 text-white px-3 py-2 rounded-lg text-xs font-bold shadow-lg transition-all transform hover:scale-110"
                           title="Executar OCR neste ficheiro"
                         >
                           {ocrLoading ? '⏳' : '🔍 OCR'}
@@ -774,22 +808,31 @@ export default function NovaDespesa() {
           </div>
         </div>
 
-        <div className="mt-8 flex gap-4">
+        <div className="mt-8 flex flex-col sm:flex-row gap-4">
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-bold py-3 px-4 rounded-lg"
+            className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-400 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5 disabled:transform-none disabled:cursor-not-allowed"
           >
-            {loading ? 'Guardando...' : 'Guardar Despesa'}
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Guardando...
+              </span>
+            ) : 'Guardar Despesa'}
           </button>
           <Link
             href="/despesas"
-            className="flex-1 text-center bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-4 rounded-lg"
+            className="flex-1 text-center bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-4 px-6 rounded-xl border-2 border-gray-300 hover:border-gray-400 transition-all duration-300"
           >
             Cancelar
           </Link>
         </div>
       </form>
+      </div>
     </div>
   )
 }

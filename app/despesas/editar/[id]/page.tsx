@@ -66,6 +66,12 @@ export default function EditarDespesa() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [selectedFile, setSelectedFile] = useState<FilePreview | null>(null)
+  const [qrLoading, setQrLoading] = useState(false)
+  const [qrMessage, setQrMessage] = useState('')
+  const [editingNif, setEditingNif] = useState('')
+  const [editingName, setEditingName] = useState('')
+  const [editingCategory, setEditingCategory] = useState('')
+  const [savingNifName, setSavingNifName] = useState(false)
   const router_push = useRouter()
 
   useEffect(() => {
@@ -95,7 +101,10 @@ export default function EditarDespesa() {
 
       setDescription(expense.description)
       setAmount(String(expense.amount))
-      setDate(expense.expense_date)
+      // Garantir que a data está no formato YYYY-MM-DD
+      const dateStr = expense.expense_date ? String(expense.expense_date).split('T')[0] : ''
+      setDate(dateStr)
+      console.log('Data carregada:', { expense_date: expense.expense_date, dateStr })
       setCategoryId(String(expense.category_id || ''))
       setPaymentMethod(expense.payment_method || 'cash')
       setVatPercentage(expense.vat_percentage ? String(expense.vat_percentage) : '')
@@ -162,6 +171,161 @@ export default function EditarDespesa() {
     }
   }
 
+  const processQrFile = async (file: File) => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+
+    setQrLoading(true)
+    setQrMessage('')
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch('/api/qr-reader', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      })
+
+      const data = await res.json()
+      console.log('QR Response:', data)
+
+      if (data.qr_data) {
+        // Preencher campos automaticamente do QR
+        const updates: string[] = []
+        if (data.qr_data.description) {
+          setDescription(data.qr_data.description)
+          setEditingName(data.qr_data.description)  // Pré-preencher com a descrição
+          updates.push('Empresa')
+        }
+        if (data.qr_data.valor_total) {
+          setAmount(data.qr_data.valor_total)
+          updates.push('Valor Total')
+        }
+        if (data.qr_data.date) {
+          setDate(data.qr_data.date)
+          updates.push('Data')
+        }
+        if (data.qr_data.valor_iva) {
+          setValorIva(data.qr_data.valor_iva)
+          updates.push('Valor IVA')
+        }
+        if (data.qr_data.numero_documento) {
+          setNumeroDocumento(data.qr_data.numero_documento)
+          updates.push('Número do Documento')
+        }
+        if (data.qr_data.nif_emitente) {
+          setNifEmitente(data.qr_data.nif_emitente)
+          setEditingNif(data.qr_data.nif_emitente)  // Pré-preencher com o NIF
+          updates.push('NIF Emitente')
+        }
+        // Se vier categoria da cache do NIF, preencher
+        if (data.qr_data.category_id) {
+          setCategoryId(String(data.qr_data.category_id))
+          setEditingCategory(String(data.qr_data.category_id))
+          updates.push('Categoria')
+        }
+        if (data.qr_data.nif_adquirente) {
+          setNifAdquirente(data.qr_data.nif_adquirente)
+          updates.push('NIF Adquirente')
+        }
+        if (data.qr_data.atcud) {
+          setAtcud(data.qr_data.atcud)
+          updates.push('ATCUD')
+        }
+        if (data.qr_data.base_tributavel) {
+          setBaseTributavel(data.qr_data.base_tributavel)
+          updates.push('Base Tributável')
+        }
+
+        setQrMessage(`✓ QR lido com sucesso! Preenchidos: ${updates.join(', ')}`)
+        setTimeout(() => setQrMessage(''), 5000)
+      } else {
+        setQrMessage('⚠ Nenhum código QR encontrado na imagem')
+        setTimeout(() => setQrMessage(''), 3000)
+      }
+    } catch (err: any) {
+      setQrMessage(`✗ Erro ao processar QR: ${err.message}`)
+      console.error('Erro QR:', err)
+      setTimeout(() => setQrMessage(''), 5000)
+    } finally {
+      setQrLoading(false)
+    }
+  }
+
+  const handleRescanQrFromAttachment = async (attachment: Attachment) => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+
+    setQrLoading(true)
+    setQrMessage('')
+
+    try {
+      // Buscar a imagem do anexo
+      const imageRes = await fetch(attachment.file_path)
+      const blob = await imageRes.blob()
+      const file = new File([blob], attachment.file_name, { type: attachment.file_type })
+
+      // Processar como QR
+      await processQrFile(file)
+    } catch (err: any) {
+      setQrMessage(`✗ Erro ao processar imagem: ${err.message}`)
+      console.error('Erro ao rescan:', err)
+      setTimeout(() => setQrMessage(''), 5000)
+    }
+  }
+
+  const handleSaveNifName = async () => {
+    // Usar os valores atuais dos campos (editingXxx ou os valores de fallback)
+    const nifToSave = editingNif || nifEmitente
+    const nameToSave = editingName || description
+
+    if (!nifToSave || !nameToSave) {
+      alert('Preenche o NIF e o nome')
+      return
+    }
+
+    const token = localStorage.getItem('token')
+    if (!token) return
+
+    setSavingNifName(true)
+
+    try {
+      const res = await fetch('/api/nif-lookup/update', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          nif: nifToSave,
+          company_name: nameToSave,
+          category_id: editingCategory || categoryId ? parseInt(editingCategory || categoryId) : null
+        })
+      })
+
+      const data = await res.json()
+      if (res.ok) {
+        setQrMessage(`✓ Nome e categoria do NIF ${nifToSave} atualizados!`)
+        // Não limpar os campos, mas aplicar os valores à despesa atual
+        setDescription(nameToSave)
+        if (editingCategory || categoryId) {
+          setCategoryId(editingCategory || categoryId)
+        }
+        setTimeout(() => setQrMessage(''), 5000)
+      } else {
+        setQrMessage(`✗ Erro ao guardar: ${data.message}`)
+        setTimeout(() => setQrMessage(''), 5000)
+      }
+    } catch (err: any) {
+      setQrMessage(`✗ Erro ao guardar NIF: ${err.message}`)
+      setTimeout(() => setQrMessage(''), 5000)
+    } finally {
+      setSavingNifName(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -180,7 +344,7 @@ export default function EditarDespesa() {
           description,
           amount,
           expense_date: date,
-          category_id: categoryId ? parseInt(categoryId) : null,
+          category_id: categoryId && categoryId !== '' ? parseInt(categoryId) : null,
           vat_percentage: vatPercentage ? parseFloat(vatPercentage) : null,
           vat_amount: valorIva ? parseFloat(valorIva) : null,
           payment_method: paymentMethod,
@@ -344,6 +508,83 @@ export default function EditarDespesa() {
               />
             </div>
 
+            {/* QR Message */}
+            {qrMessage && (
+              <div className={`mb-4 p-4 rounded-lg border ${
+                qrMessage.includes('✓')
+                  ? 'bg-green-50 border-green-200 text-green-600'
+                  : qrMessage.includes('⚠')
+                  ? 'bg-yellow-50 border-yellow-200 text-yellow-600'
+                  : 'bg-red-50 border-red-200 text-red-600'
+              } font-semibold`}>
+                {qrMessage}
+              </div>
+            )}
+
+            {/* Editar Nome do NIF na Cache */}
+            {nifEmitente && (
+              <div className="mb-4 bg-purple-50 p-4 rounded-lg border border-purple-200">
+                <h3 className="text-lg font-bold text-purple-900 mb-4">Corrigir Nome e Categoria da Empresa</h3>
+                <p className="text-sm text-gray-600 mb-3">
+                  Se o nome ou categoria extraídos estão incorretos, podes corrigir e guardar na base de dados. Próximas faturas com este NIF usarão estes dados automaticamente.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-2">
+                      NIF
+                    </label>
+                    <input
+                      type="text"
+                      value={editingNif || nifEmitente}
+                      onChange={(e) => setEditingNif(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-purple-500"
+                      placeholder="NIF"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-2">
+                      Nome da Empresa
+                    </label>
+                    <input
+                      type="text"
+                      value={editingName || description}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-purple-500"
+                      placeholder="Nome da empresa"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-2">
+                      Categoria Padrão
+                    </label>
+                    <select
+                      value={editingCategory || categoryId}
+                      onChange={(e) => setEditingCategory(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="">Selecione uma categoria</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveNifName}
+                  disabled={savingNifName}
+                  className="w-full px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-300 text-white font-bold rounded-lg transition-colors"
+                >
+                  {savingNifName ? '⏳ A guardar...' : '💾 Guardar Nome e Categoria na Cache'}
+                </button>
+                <p className="text-xs text-gray-500 mt-2">
+                  💡 Ao guardar, todas as despesas futuras com este NIF usarão automaticamente este nome e categoria.
+                </p>
+              </div>
+            )}
+
             {(nifEmitente || nifAdquirente || numeroDocumento || atcud || baseTributavel || valorIva) && (
               <div className="mb-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
                 <h3 className="text-lg font-bold text-blue-900 mb-4">Dados do QR Code AT</h3>
@@ -431,31 +672,43 @@ export default function EditarDespesa() {
                 </label>
                 <div className="grid grid-cols-1 gap-2">
                   {filePreviews.map((preview, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setSelectedFile(preview)}
-                      className="border border-gray-300 rounded-lg overflow-hidden bg-gray-50 hover:shadow-lg transition-shadow cursor-pointer p-3"
-                    >
-                      {preview.type === 'pdf' ? (
-                        <div className="flex items-center gap-3">
-                          <p className="text-2xl">📄</p>
-                          <div className="text-left">
-                            <p className="text-sm font-bold text-gray-900 truncate">{preview.name}</p>
-                            <p className="text-xs text-gray-500">PDF</p>
+                    <div key={idx} className="border border-gray-300 rounded-lg overflow-hidden bg-gray-50 p-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFile(preview)}
+                        className="w-full hover:shadow-lg transition-shadow cursor-pointer"
+                      >
+                        {preview.type === 'pdf' ? (
+                          <div className="flex items-center gap-3">
+                            <p className="text-2xl">📄</p>
+                            <div className="text-left">
+                              <p className="text-sm font-bold text-gray-900 truncate">{preview.name}</p>
+                              <p className="text-xs text-gray-500">PDF</p>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <img
-                            src={preview.data}
-                            alt={`Preview ${idx + 1}`}
-                            className="w-full h-32 object-cover rounded"
-                          />
-                          <p className="text-xs text-gray-600 mt-2 truncate">{preview.name}</p>
-                        </div>
+                        ) : (
+                          <div>
+                            <img
+                              src={preview.data}
+                              alt={`Preview ${idx + 1}`}
+                              className="w-full h-32 object-cover rounded"
+                            />
+                            <p className="text-xs text-gray-600 mt-2 truncate">{preview.name}</p>
+                          </div>
+                        )}
+                      </button>
+                      {/* Botão refazer scan para imagens */}
+                      {preview.type === 'image' && (
+                        <button
+                          type="button"
+                          onClick={() => handleRescanQrFromAttachment(attachments[idx])}
+                          disabled={qrLoading}
+                          className="w-full mt-2 px-3 py-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white text-sm font-bold rounded transition-colors"
+                        >
+                          {qrLoading ? '⏳ A processar QR...' : '🔄 Refazer Scan QR'}
+                        </button>
                       )}
-                    </button>
+                    </div>
                   ))}
                 </div>
               </div>

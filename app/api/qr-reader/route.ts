@@ -6,6 +6,7 @@ import { mkdirSync } from 'fs'
 import path from 'path'
 import os from 'os'
 
+// Cache Buster: 20251127130000
 interface QRData {
   nif_emitente: string | null
   nif_adquirente: string | null
@@ -71,6 +72,7 @@ const handler = async (req: NextRequest, context: any) => {
 
       // Execute Python script
       let output = ''
+      let pythonError: { stdout?: string; stderr?: string; message?: string } | null = null
       try {
         console.log(`Executing: python3 "${pythonScript}" "${imagePath}" --json /tmp/qr-output-${timestamp}.json`)
         output = execSync(`python3 "${pythonScript}" "${imagePath}" --json /tmp/qr-output-${timestamp}.json`, {
@@ -84,14 +86,32 @@ const handler = async (req: NextRequest, context: any) => {
         console.error('stderr:', error.stderr)
         console.error('stdout:', error.stdout)
         console.error('message:', error.message)
+        pythonError = error
       }
 
       // Check if JSON output file was created
       const jsonPath = `/tmp/qr-output-${timestamp}.json`
       if (!existsSync(jsonPath)) {
         console.error('JSON output file not created. Python likely failed to find QR code.')
+
+        // Try to parse stdout as JSON error from Python script
+        if (pythonError?.stdout) {
+          try {
+            const errorData = JSON.parse(pythonError.stdout)
+            if (errorData.error) {
+              console.error('Python script error:', errorData.error)
+              return NextResponse.json(
+                { message: errorData.error },
+                { status: 400 }
+              )
+            }
+          } catch (e) {
+            // Not valid JSON, fall through to default error
+          }
+        }
+
         return NextResponse.json(
-          { message: 'Nenhum código QR encontrado na imagem' },
+          { message: 'Nenhum código QR encontrado na imagem. Verifique se a imagem contém um QR code válido e está legível.' },
           { status: 400 }
         )
       }
@@ -120,10 +140,9 @@ const handler = async (req: NextRequest, context: any) => {
       if (qrData.nif_emitente) {
         console.log(`A procurar NIF emitente: ${qrData.nif_emitente}`)
         try {
-          // Use localhost for internal calls to avoid SSL issues
-          const apiUrl = process.env.NODE_ENV === 'development'
-            ? 'http://localhost:8520/api/nif-lookup'
-            : `${new URL(req.url).origin}/api/nif-lookup`
+          // Always use localhost for internal calls to avoid SSL issues
+          // (even in production, since we're calling our own API internally)
+          const apiUrl = 'http://localhost:8520/api/nif-lookup'
 
           console.log(`Calling NIF lookup API: ${apiUrl}`)
           const nifLookupRes = await fetch(apiUrl, {
@@ -190,7 +209,7 @@ const handler = async (req: NextRequest, context: any) => {
           unlinkSync(imagePath)
         }
       } catch (e) {
-        console.warn('Erro ao limpar ficheiro temporário:', e)
+        console.warn('Erro ao limpar ficheiros temporários:', e)
       }
     }
   } catch (error: any) {

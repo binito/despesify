@@ -10,6 +10,9 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.9",
+    "@tailwindcss/forms": "^0.5.10",
+    "@tremor/react": "^3.18.7",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "csv-writer": "^1.6.0",
@@ -25,6 +28,7 @@
     "pdfjs-dist": "^5.4.394",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "remixicon": "^4.7.0",
     "sharp": "^0.34.5",
     "tesseract.js": "^4.1.1"
   },

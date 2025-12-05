@@ -11,8 +11,23 @@ const handler = async (req: NextRequest, context: any) => {
       const expenses = await query(
         'SELECT e.*, c.name as category_name FROM expenses e LEFT JOIN categories c ON e.category_id = c.id WHERE e.user_id = ? ORDER BY e.expense_date DESC',
         [userId]
-      )
-      return NextResponse.json({ expenses })
+      ) as any[]
+
+      // Calculate vat_percentage from vat_amount if percentage is null
+      const processedExpenses = expenses.map(exp => {
+        if (exp.vat_percentage === null && exp.vat_amount && exp.amount) {
+          const amount = Number(exp.amount)
+          const vatAmount = Number(exp.vat_amount)
+          // Calculate percentage: (vat / (total - vat)) * 100
+          const baseAmount = amount - vatAmount
+          if (baseAmount > 0) {
+            exp.vat_percentage = Math.round((vatAmount / baseAmount) * 100 * 100) / 100
+          }
+        }
+        return exp
+      })
+
+      return NextResponse.json({ expenses: processedExpenses })
     } catch (error: any) {
       return NextResponse.json({ message: error.message }, { status: 500 })
     }
@@ -26,7 +41,7 @@ const handler = async (req: NextRequest, context: any) => {
       const description = formData.get('description')
       const amount = formData.get('amount')
       const date = formData.get('expense_date')
-      const categoryId = formData.get('category_id')
+      let categoryId = formData.get('category_id')
       const vatPercentage = formData.get('vat_percentage')
       const paymentMethod = formData.get('payment_method')
       const notes = formData.get('notes')
@@ -40,10 +55,31 @@ const handler = async (req: NextRequest, context: any) => {
       const baseTributavel = formData.get('base_tributavel')
       const valorIva = formData.get('valor_iva')
 
+      // If no category provided but NIF exists, lookup category from cache
+      if ((!categoryId || categoryId === '') && nifEmitente) {
+        const nifCacheResult = await query(
+          'SELECT category_id FROM nif_cache WHERE nif = ?',
+          [nifEmitente]
+        ) as any[]
+
+        if (nifCacheResult.length > 0 && nifCacheResult[0].category_id) {
+          categoryId = String(nifCacheResult[0].category_id)
+          console.log(`Auto-assigned category ${categoryId} from NIF cache for NIF ${nifEmitente}`)
+        }
+      }
+
+      // Process vatPercentage: convert to number if not empty, otherwise null
+      const processedVatPercentage = (vatPercentage !== null && vatPercentage !== '') ? Number(vatPercentage) : null;
+      // Process valorIva: convert to number if not empty, otherwise null
+      const processedValorIva = (valorIva !== null && valorIva !== '') ? Number(valorIva) : null;
+      // Process baseTributavel: convert to number if not empty, otherwise null
+      const processedBaseTributavel = (baseTributavel !== null && baseTributavel !== '') ? Number(baseTributavel) : null;
+
+
       // Create expense
       const result = await query(
         'INSERT INTO expenses (user_id, category_id, description, amount, expense_date, payment_method, notes, vat_percentage, vat_amount, nif_emitente, nif_adquirente, numero_documento, atcud, base_tributavel, qr_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [userId, categoryId || null, description, amount, date, paymentMethod, notes, vatPercentage || null, valorIva || null, nifEmitente || null, nifAdquirente || null, numeroDocumento || null, atcud || null, baseTributavel || null, qrData || null]
+        [userId, categoryId || null, description, amount, date, paymentMethod, notes, processedVatPercentage, processedValorIva, nifEmitente || null, nifAdquirente || null, numeroDocumento || null, atcud || null, processedBaseTributavel, qrData || null]
       ) as any
 
       const expenseId = result.insertId
