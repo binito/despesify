@@ -131,11 +131,13 @@ export default function NovaDespesa() {
         }
       }
 
-      // Tentar QR na primeira imagem
-      if (selectedFiles[0].type.startsWith('image/')) {
-        setQrReadSuccess(false)
-        await performQRRead(selectedFiles[0])
-      }
+      // DESATIVADO: Leitura automática de QR no upload
+      // Agora usa-se apenas o scanner de câmara para ler QR codes
+      // Upload de ficheiro serve apenas para guardar cópia da fatura
+      // if (selectedFiles[0].type.startsWith('image/')) {
+      //   setQrReadSuccess(false)
+      //   await performQRRead(selectedFiles[0])
+      // }
     }
   }
 
@@ -284,6 +286,11 @@ export default function NovaDespesa() {
     }
   }
 
+  // DESATIVADO: Leitura de QR por upload de ficheiro
+  // Agora usa-se apenas o scanner de câmara (handleQRScan)
+  // Upload serve apenas para guardar cópia da fatura
+  // Código mantido para referência futura
+  /*
   const performQRRead = async (file: File, showMessage: boolean = false) => {
     try {
       if (showMessage) setOcrLoading(true)
@@ -366,6 +373,7 @@ export default function NovaDespesa() {
       if (showMessage) setOcrLoading(false)
     }
   }
+  */
 
   const handleManualOCR = async (preview: FilePreview) => {
     // Converter preview de volta para File
@@ -374,12 +382,16 @@ export default function NovaDespesa() {
     await performOCR(file, true)
   }
 
+  // DESATIVADO: Função de leitura manual de QR por ficheiro
+  // Usa-se apenas o scanner de câmara agora
+  /*
   const handleManualQRRead = async (preview: FilePreview) => {
     // Converter preview de volta para File
     const blob = await fetch(preview.data).then(r => r.blob())
     const file = new File([blob], preview.name, { type: 'image/jpeg' })
     await performQRRead(file, true)
   }
+  */
 
   const handleCreateCategory = async () => {
     if (!newCategory.trim()) {
@@ -847,8 +859,9 @@ export default function NovaDespesa() {
                         )}
                       </button>
 
-                      {/* Botões de OCR e QR sobrepostos */}
+                      {/* Botão de OCR sobreposto */}
                       <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {/* DESATIVADO: Botão de QR - agora usa-se apenas scanner de câmara
                         <button
                           type="button"
                           onClick={() => handleManualQRRead(preview)}
@@ -858,6 +871,7 @@ export default function NovaDespesa() {
                         >
                           {ocrLoading ? '⏳' : '📱 QR'}
                         </button>
+                        */}
                         <button
                           type="button"
                           onClick={() => handleManualOCR(preview)}
