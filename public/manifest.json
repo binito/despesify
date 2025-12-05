@@ -1,0 +1,71 @@
+{
+  "name": "Despesify - Gestor de Despesas",
+  "short_name": "Despesify",
+  "description": "Aplicação para controle e análise de despesas pessoais com leitura de QR codes AT",
+  "start_url": "https://despesify.cafemartins.pt/",
+  "scope": "https://despesify.cafemartins.pt/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3B82F6",
+  "orientation": "portrait-primary",
+  "categories": ["finance", "productivity"],
+  "icons": [
+    {
+      "src": "https://despesify.cafemartins.pt/icon-72.png",
+      "sizes": "72x72",
+      "type": "image/png"
+    },
+    {
+      "src": "https://despesify.cafemartins.pt/icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png"
+    },
+    {
+      "src": "https://despesify.cafemartins.pt/icon-128.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    },
+    {
+      "src": "https://despesify.cafemartins.pt/icon-144.png",
+      "sizes": "144x144",
+      "type": "image/png"
+    },
+    {
+      "src": "https://despesify.cafemartins.pt/icon-152.png",
+      "sizes": "152x152",
+      "type": "image/png"
+    },
+    {
+      "src": "https://despesify.cafemartins.pt/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://despesify.cafemartins.pt/icon-384.png",
+      "sizes": "384x384",
+      "type": "image/png"
+    },
+    {
+      "src": "https://despesify.cafemartins.pt/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Nova Despesa",
+      "short_name": "Nova",
+      "description": "Adicionar nova despesa",
+      "url": "https://despesify.cafemartins.pt/despesas/nova",
+      "icons": [
+        {
+          "src": "https://despesify.cafemartins.pt/icon-96.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ]
+}
