@@ -319,7 +319,6 @@ export default function Relatorio() {
       // Table rows
       pdf.setFont('helvetica', 'normal')
       pdf.setFontSize(8.5)
-      pdf.setTextColor(darkText[0], darkText[1], darkText[2])
 
       let alternateRow = false
       filteredExpenses.forEach((exp, index) => {
@@ -342,14 +341,18 @@ export default function Relatorio() {
           alternateRow = false
         }
 
-        // Alternate row colors
+        // Draw background for ALL rows (white or gray)
         if (alternateRow) {
           pdf.setFillColor(secondaryColor[0], secondaryColor[1], secondaryColor[2])
-          pdf.rect(margins.left, yPosition - rowHeight + 0.5, contentWidth, rowHeight, 'F')
+        } else {
+          pdf.setFillColor(255, 255, 255) // White background
         }
+        pdf.rect(margins.left, yPosition, contentWidth, rowHeight, 'F')
 
-        pdf.setTextColor(darkText[0], darkText[1], darkText[2])
+        // IMPORTANT: Set text color to BLACK for all text
+        pdf.setTextColor(0, 0, 0)
         pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(8.5)
 
         const date = new Date(exp.expense_date).toLocaleDateString('pt-PT')
         const description = String(exp.description).substring(0, 35)
